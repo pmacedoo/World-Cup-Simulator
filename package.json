@@ -1,0 +1,16 @@
+{
+  "name": "world-cup-simulator",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Simulador interativo da Copa do Mundo FIFA 2026.",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "vite build",
+    "preview": "vite preview --host 127.0.0.1",
+    "check": "npm run build"
+  },
+  "devDependencies": {
+    "vite": "^6.0.0"
+  }
+}

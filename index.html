@@ -43,7 +43,7 @@
 <script src="https://unpkg.com/lucide@0.460.0/dist/umd/lucide.min.js"></script>
 
 <!-- ===================== CUSTOM CSS ===================== -->
-<link rel="stylesheet" href="./styles.css" />
+<link rel="stylesheet" href="./src/styles/styles.css" />
 </head>
 
 <body class="font-sans text-ink antialiased selection:bg-usablue/20">
@@ -290,7 +290,7 @@
     </div>
     <div class="text-slate-500 leading-relaxed">
       <p class="font-bold text-slate-700 mb-2 flex items-center gap-1.5"><i data-lucide="refresh-cw" class="w-4 h-4 text-mxgreen"></i> Atualização de dados</p>
-      <p>A base ativa está em <code class="px-1 py-0.5 rounded bg-slate-200/70 text-slate-700 text-xs">worldcup-data.js</code>: elencos oficiais do PDF, grupos oficiais A-L, tabela de 495 combinações para terceiros colocados e proteção FIFA dos quatro primeiros do ranking. O motor e a interface ficam em <code class="px-1 py-0.5 rounded bg-slate-200/70 text-slate-700 text-xs">app.js</code> e os estilos em <code class="px-1 py-0.5 rounded bg-slate-200/70 text-slate-700 text-xs">styles.css</code>. O protótipo inicial foi movido para <code class="px-1 py-0.5 rounded bg-slate-200/70 text-slate-700 text-xs">prototype-legacy.js</code> (não carregado), apenas como referência histórica.</p>
+      <p>A base ativa está em <code class="px-1 py-0.5 rounded bg-slate-200/70 text-slate-700 text-xs">src/data/worldcup-data.js</code>: elencos oficiais do PDF, grupos oficiais A-L, tabela de 495 combinações para terceiros colocados e proteção FIFA dos quatro primeiros do ranking. O motor fica em <code class="px-1 py-0.5 rounded bg-slate-200/70 text-slate-700 text-xs">src/engine/simulation.js</code>, a interface em <code class="px-1 py-0.5 rounded bg-slate-200/70 text-slate-700 text-xs">src/app/app.js</code> e os estilos em <code class="px-1 py-0.5 rounded bg-slate-200/70 text-slate-700 text-xs">src/styles/styles.css</code>. O protótipo inicial foi movido para <code class="px-1 py-0.5 rounded bg-slate-200/70 text-slate-700 text-xs">src/legacy/prototype-legacy.js</code> (não carregado), apenas como referência histórica.</p>
     </div>
   </div>
   <div class="text-center text-xs text-slate-400 pb-8">Feito com Tailwind CSS + JavaScript puro · sem backend · sem build step.</div>
@@ -301,7 +301,22 @@
 <!-- DATA + ENGINE + RENDER                                         -->
 <!-- ============================================================= -->
 <!-- ============================================================= -->
-<script src="./worldcup-data.js"></script>
-<script src="./app.js"></script>
+<script src="./src/data/worldcup-data.js"></script>
+<script src="./src/data/venues.js"></script>
+<script src="./src/engine/random.js"></script>
+<script src="./src/engine/scoring.js"></script>
+<script src="./src/domain/bracket/top-seed-protection.js"></script>
+<script src="./src/engine/simulation.js"></script>
+<script src="./src/app/narrative.js"></script>
+<script src="./src/state/simulation-profiles.js"></script>
+<script src="./src/state/simulation-store.js"></script>
+<script src="./src/ui/render-helpers.js"></script>
+<script src="./src/ui/guided-experience.js"></script>
+<script src="./src/ui/dashboard.js"></script>
+<script src="./src/ui/tournament-sections.js"></script>
+<script src="./src/ui/bracket.js"></script>
+<script src="./src/ui/match-simulator.js"></script>
+<script src="./src/ui/stats.js"></script>
+<script src="./src/app/app.js"></script>
 </body>
 </html>
