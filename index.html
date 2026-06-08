@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Simulador Copa do Mundo FIFA 2026 — Reportagem Interativa</title>
+<meta name="description" content="Três simulações realistas e detalhadas da Copa do Mundo FIFA 2026 (EUA, México e Canadá): grupos, jogos, mata-mata, artilheiros e narrativa." />
+
+<!-- ===================== TAILWIND CSS (CDN) ===================== -->
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        fontFamily: {
+          sans: ['Inter', 'system-ui', '-apple-system', 'Segoe UI', 'Roboto', 'sans-serif'],
+          display: ['"Plus Jakarta Sans"', 'Inter', 'sans-serif'],
+        },
+        colors: {
+          gold:   { 400:'#f5d272', 500:'#e9b949', 600:'#c8962f' },
+          ink:    '#0b1020',
+          mxgreen:'#1f7a4d',
+          usared: '#b31942',
+          usablue:'#0a3161',
+        },
+        boxShadow: {
+          glass: '0 8px 30px rgba(15,23,42,0.08), 0 1px 2px rgba(15,23,42,0.06)',
+          lift:  '0 24px 60px -12px rgba(15,23,42,0.22)',
+        },
+      }
+    }
+  }
+</script>
+
+<!-- ===================== GOOGLE FONTS ===================== -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap" rel="stylesheet">
+
+<!-- ===================== FLAG ICONS (bandeiras reais) ===================== -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flag-icons@7.2.3/css/flag-icons.min.css" />
+<!-- ===================== LUCIDE (ícones) ===================== -->
+<script src="https://unpkg.com/lucide@0.460.0/dist/umd/lucide.min.js"></script>
+
+<!-- ===================== CUSTOM CSS ===================== -->
+<link rel="stylesheet" href="./styles.css" />
+</head>
+
+<body class="font-sans text-ink antialiased selection:bg-usablue/20">
+
+<!-- progress / loading bar -->
+<div id="loader" class="loader"></div>
+
+<!-- ============================================================= -->
+<!-- STICKY NAV                                                     -->
+<!-- ============================================================= -->
+<header id="siteHeader" class="sticky top-0 z-50">
+  <div class="glass border-b border-white/40">
+    <nav class="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
+      <a href="#top" class="flex items-center gap-2.5 shrink-0">
+        <span class="grid place-items-center w-9 h-9 rounded-xl text-white text-sm font-extrabold" style="background:var(--grad-2026)">26</span>
+        <span class="font-display font-extrabold tracking-tight text-[15px] leading-none">Copa 2026 <span class="text-slate-400 font-semibold">· Simulador</span></span>
+      </a>
+
+      <div class="hidden lg:flex items-center gap-1 text-[13px] font-semibold text-slate-600">
+        <a class="nav-link px-3 py-2 rounded-lg hover:text-ink" href="#minha">Minha Seleção</a>
+        <a class="nav-link active px-3 py-2 rounded-lg hover:text-ink" href="#overview">Visão Geral</a>
+        <a class="nav-link px-3 py-2 rounded-lg hover:text-ink" href="#grupos">Grupos</a>
+        <a class="nav-link px-3 py-2 rounded-lg hover:text-ink" href="#jogos">Jogos</a>
+        <a class="nav-link px-3 py-2 rounded-lg hover:text-ink" href="#terceiros">Terceiros</a>
+        <a class="nav-link px-3 py-2 rounded-lg hover:text-ink" href="#mata">Mata-mata</a>
+        <a class="nav-link px-3 py-2 rounded-lg hover:text-ink" href="#roteiro">Roteiro</a>
+        <a class="nav-link px-3 py-2 rounded-lg hover:text-ink" href="#stats">Estatísticas</a>
+      </div>
+
+      <button id="navGenerate" class="btn-premium text-white text-[13px] font-bold px-4 py-2 rounded-xl hidden sm:flex items-center gap-2">
+        <i data-lucide="refresh-cw" class="w-[15px] h-[15px]"></i>
+        Gerar por tipo
+      </button>
+
+      <!-- mobile menu button -->
+      <button id="mobBtn" class="lg:hidden grid place-items-center w-10 h-10 rounded-xl glass" aria-label="Menu">
+        <i data-lucide="menu" class="w-5 h-5"></i>
+      </button>
+    </nav>
+
+    <!-- mobile menu -->
+    <div id="mobMenu" class="lg:hidden hidden border-t border-white/40 px-4 py-3 grid grid-cols-2 gap-1 text-sm font-semibold text-slate-700">
+      <a class="px-3 py-2 rounded-lg hover:bg-white/60" href="#minha">Minha Seleção</a>
+      <a class="px-3 py-2 rounded-lg hover:bg-white/60" href="#overview">Visão Geral</a>
+      <a class="px-3 py-2 rounded-lg hover:bg-white/60" href="#grupos">Grupos</a>
+      <a class="px-3 py-2 rounded-lg hover:bg-white/60" href="#jogos">Jogos</a>
+      <a class="px-3 py-2 rounded-lg hover:bg-white/60" href="#terceiros">Terceiros</a>
+      <a class="px-3 py-2 rounded-lg hover:bg-white/60" href="#mata">Mata-mata</a>
+      <a class="px-3 py-2 rounded-lg hover:bg-white/60" href="#roteiro">Roteiro</a>
+      <a class="px-3 py-2 rounded-lg hover:bg-white/60" href="#stats">Estatísticas</a>
+      <button id="mobGenerate" class="col-span-2 btn-premium text-white font-bold px-3 py-2 rounded-lg mt-1">Gerar por tipo</button>
+    </div>
+  </div>
+</header>
+
+<div id="guidedExperience"></div>
+
+<main id="top">
+
+<!-- ============================================================= -->
+<!-- HERO                                                           -->
+<!-- ============================================================= -->
+<section class="relative overflow-hidden">
+  <div class="absolute inset-0 -z-10">
+    <div class="absolute -top-24 -left-24 w-[480px] h-[480px] rounded-full blur-3xl opacity-30" style="background:radial-gradient(circle,#0a3161,transparent 65%)"></div>
+    <div class="absolute top-10 right-0 w-[420px] h-[420px] rounded-full blur-3xl opacity-25" style="background:radial-gradient(circle,#b31942,transparent 65%)"></div>
+    <div class="absolute bottom-0 left-1/3 w-[420px] h-[420px] rounded-full blur-3xl opacity-25" style="background:radial-gradient(circle,#1f7a4d,transparent 65%)"></div>
+  </div>
+
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 pt-12 pb-10 sm:pt-16">
+    <div class="flex flex-wrap items-center gap-2 mb-5 reveal">
+      <span class="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-full glass text-slate-700"><span class="fi fi-us flag-img"></span><span class="fi fi-mx flag-img"></span><span class="fi fi-ca flag-img"></span> EUA · México · Canadá</span>
+      <span class="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-full glass text-slate-700">48 seleções · 12 grupos · 104 jogos</span>
+      <span class="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-full glass text-slate-700">Projeção não-oficial</span>
+    </div>
+
+    <h1 class="font-display font-extrabold tracking-tight text-4xl sm:text-6xl leading-[1.02] reveal">
+      Simulador <span class="grad-text">Copa do Mundo</span><br class="hidden sm:block"/> FIFA 2026
+    </h1>
+    <p class="mt-5 max-w-2xl text-slate-600 text-base sm:text-lg leading-relaxed reveal">
+      Três simulações completas e realistas — construídas a partir de <b>forma atual</b>, <b>elenco provável</b>,
+      <b>técnicos</b>, <b>chaveamento</b>, <b>moral</b> e <b>narrativa esportiva</b>. Cada gol, minuto, artilheiro e
+      virada de mata-mata é gerado por um motor de simulação ponderado pela força das seleções.
+    </p>
+
+    <!-- simulation tabs -->
+    <div id="simTabs" class="mt-7 flex flex-wrap gap-2 reveal"></div>
+
+    <!-- quick cards -->
+    <div id="heroCards" class="mt-7 grid sm:grid-cols-3 gap-4 reveal"></div>
+
+    <div class="mt-7 flex flex-wrap items-center gap-3 reveal">
+      <button id="heroGenerate" class="btn-premium text-white font-bold px-6 py-3.5 rounded-2xl flex items-center gap-2">
+        <i data-lucide="refresh-cw" class="w-[18px] h-[18px]"></i>
+        Gerar nova simulação
+      </button>
+      <div id="heroTypeControls" class="flex flex-wrap gap-2"></div>
+      <a href="#mata" class="font-bold px-6 py-3.5 rounded-2xl glass card-hover text-slate-700 flex items-center gap-2">
+        Ver chaveamento
+        <i data-lucide="arrow-right" class="w-4 h-4"></i>
+      </a>
+      <span id="simMeta" class="text-xs text-slate-500 font-medium"></span>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================= -->
+<!-- MINHA SELEÇÃO                                                  -->
+<!-- ============================================================= -->
+<section id="minha" class="max-w-7xl mx-auto px-4 sm:px-6 py-10 scroll-mt-20">
+  <div class="flex flex-wrap items-end justify-between gap-4 mb-6">
+    <div>
+      <h2 class="font-display font-extrabold text-2xl sm:text-3xl tracking-tight">Minha Seleção</h2>
+      <p class="text-slate-500 mt-1 text-sm font-medium">Acompanhe a campanha da sua seleção favorita dentro da simulação ativa.</p>
+    </div>
+    <div id="myTeamTypeControls" class="flex flex-wrap gap-2"></div>
+  </div>
+  <div id="myTeamWrap"></div>
+</section>
+
+<!-- ============================================================= -->
+<!-- OVERVIEW / RESUMO                                              -->
+<!-- ============================================================= -->
+<section id="overview" class="max-w-7xl mx-auto px-4 sm:px-6 py-10 scroll-mt-20">
+  <div class="flex items-end justify-between gap-4 mb-6">
+    <div>
+      <h2 class="font-display font-extrabold text-2xl sm:text-3xl tracking-tight">Resumo da simulação</h2>
+      <p id="ovTone" class="text-slate-500 mt-1 text-sm font-medium"></p>
+    </div>
+  </div>
+  <div id="overviewGrid" class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4"></div>
+
+  <!-- final + podium banner -->
+  <div id="podium" class="mt-6"></div>
+</section>
+
+<!-- ============================================================= -->
+<!-- GRUPOS                                                         -->
+<!-- ============================================================= -->
+<section id="grupos" class="max-w-7xl mx-auto px-4 sm:px-6 py-10 scroll-mt-20">
+  <div class="flex items-end justify-between gap-4 mb-6">
+    <div>
+      <h2 class="font-display font-extrabold text-2xl sm:text-3xl tracking-tight">Fase de grupos</h2>
+      <p class="text-slate-500 mt-1 text-sm font-medium">12 grupos · classificação final · avançam os 2 primeiros + 8 melhores terceiros.</p>
+    </div>
+    <div class="hidden sm:flex items-center gap-3 text-xs font-semibold">
+      <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-full bg-mxgreen"></span>1º/2º</span>
+      <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-full bg-gold-500"></span>3º (melhores terceiros)</span>
+      <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-full bg-slate-300"></span>Eliminado</span>
+    </div>
+  </div>
+  <div id="groupsGrid" class="grid md:grid-cols-2 xl:grid-cols-3 gap-5"></div>
+</section>
+
+<!-- ============================================================= -->
+<!-- JOGOS                                                          -->
+<!-- ============================================================= -->
+<section id="jogos" class="max-w-7xl mx-auto px-4 sm:px-6 py-10 scroll-mt-20">
+  <div class="flex flex-wrap items-end justify-between gap-4 mb-6">
+    <div>
+      <h2 class="font-display font-extrabold text-2xl sm:text-3xl tracking-tight">Jogos da fase de grupos</h2>
+      <p class="text-slate-500 mt-1 text-sm font-medium">Todas as rodadas, placares, gols, autores e minutos.</p>
+    </div>
+    <div class="flex items-center gap-2">
+      <select id="filterGroup" class="glass rounded-xl px-3 py-2 text-sm font-semibold text-slate-700 outline-none"></select>
+      <select id="filterRound" class="glass rounded-xl px-3 py-2 text-sm font-semibold text-slate-700 outline-none">
+        <option value="all">Todas as rodadas</option>
+        <option value="1">Rodada 1</option>
+        <option value="2">Rodada 2</option>
+        <option value="3">Rodada 3</option>
+      </select>
+    </div>
+  </div>
+  <div id="matchesWrap" class="space-y-3"></div>
+</section>
+
+<!-- ============================================================= -->
+<!-- TERCEIROS                                                      -->
+<!-- ============================================================= -->
+<section id="terceiros" class="max-w-7xl mx-auto px-4 sm:px-6 py-10 scroll-mt-20">
+  <div class="mb-6">
+    <h2 class="font-display font-extrabold text-2xl sm:text-3xl tracking-tight">Ranking dos terceiros colocados</h2>
+    <p class="text-slate-500 mt-1 text-sm font-medium">Os 8 melhores entre os 12 grupos avançam ao mata-mata de 32.</p>
+  </div>
+  <div id="thirdsWrap" class="glass rounded-3xl shadow-glass overflow-hidden"></div>
+</section>
+
+<!-- ============================================================= -->
+<!-- MATA-MATA                                                      -->
+<!-- ============================================================= -->
+<section id="mata" class="max-w-7xl mx-auto px-4 sm:px-6 py-10 scroll-mt-20">
+  <div class="mb-6">
+    <h2 class="font-display font-extrabold text-2xl sm:text-3xl tracking-tight">Chaveamento do mata-mata</h2>
+    <p class="text-slate-500 mt-1 text-sm font-medium">32 seleções · árvore espelhada da fase de 32 até a final. Clique numa partida para ver gols e resumo.</p>
+  </div>
+
+  <div class="glass rounded-3xl shadow-glass p-3 sm:p-5 overflow-hidden">
+    <div id="rankingProtectionWrap" class="mb-4"></div>
+    <div id="bracket" class="bracket"></div>
+  </div>
+
+  <div id="thirdFinalWrap" class="grid md:grid-cols-2 gap-5 mt-5"></div>
+</section>
+
+<!-- ============================================================= -->
+<!-- ROTEIRO / NARRATIVA                                            -->
+<!-- ============================================================= -->
+<section id="roteiro" class="max-w-7xl mx-auto px-4 sm:px-6 py-10 scroll-mt-20">
+  <div class="mb-6">
+    <h2 class="font-display font-extrabold text-2xl sm:text-3xl tracking-tight">O roteiro desta Copa</h2>
+    <p class="text-slate-500 mt-1 text-sm font-medium">Como a história foi escrita — favoritos, surpresas, heróis e a construção da final.</p>
+  </div>
+  <article id="narrative" class="grid lg:grid-cols-3 gap-5"></article>
+</section>
+
+<!-- ============================================================= -->
+<!-- ESTATÍSTICAS                                                   -->
+<!-- ============================================================= -->
+<section id="stats" class="max-w-7xl mx-auto px-4 sm:px-6 py-10 scroll-mt-20">
+  <div class="mb-6">
+    <h2 class="font-display font-extrabold text-2xl sm:text-3xl tracking-tight">Estatísticas finais</h2>
+    <p class="text-slate-500 mt-1 text-sm font-medium">Artilheiros, assistências, seleção ideal e os números do torneio.</p>
+  </div>
+  <div id="statsWrap" class="grid lg:grid-cols-3 gap-5"></div>
+</section>
+
+</main>
+
+<!-- ============================================================= -->
+<!-- FOOTER                                                         -->
+<!-- ============================================================= -->
+<footer id="siteFooter" class="mt-10 border-t border-white/50">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 py-10 grid sm:grid-cols-3 gap-8 text-sm">
+    <div>
+      <div class="flex items-center gap-2.5 mb-3">
+        <span class="grid place-items-center w-8 h-8 rounded-lg text-white text-xs font-extrabold" style="background:var(--grad-2026)">26</span>
+        <span class="font-display font-extrabold">Copa 2026 · Simulador</span>
+      </div>
+      <p class="text-slate-500 leading-relaxed">Reportagem interativa e projetiva. Visual inspirado em interfaces premium de dashboards esportivos.</p>
+    </div>
+    <div class="text-slate-500 leading-relaxed">
+      <p class="font-bold text-slate-700 mb-2 flex items-center gap-1.5"><i data-lucide="triangle-alert" class="w-4 h-4 text-amber-500"></i> Aviso de simulação</p>
+      <p>Este é um produto <b>não-oficial</b> e <b>fictício</b>. Resultados, escalações e gols são <b>projeções geradas por software</b>. Os grupos, a lista de 48 seleções e os 26 convocados por seleção seguem a base anexada/agenda oficial; placares e escalações-base continuam sendo simulações.</p>
+    </div>
+    <div class="text-slate-500 leading-relaxed">
+      <p class="font-bold text-slate-700 mb-2 flex items-center gap-1.5"><i data-lucide="refresh-cw" class="w-4 h-4 text-mxgreen"></i> Atualização de dados</p>
+      <p>A base ativa está em <code class="px-1 py-0.5 rounded bg-slate-200/70 text-slate-700 text-xs">worldcup-data.js</code>: elencos oficiais do PDF, grupos oficiais A-L, tabela de 495 combinações para terceiros colocados e proteção FIFA dos quatro primeiros do ranking. O motor e a interface ficam em <code class="px-1 py-0.5 rounded bg-slate-200/70 text-slate-700 text-xs">app.js</code> e os estilos em <code class="px-1 py-0.5 rounded bg-slate-200/70 text-slate-700 text-xs">styles.css</code>. O protótipo inicial foi movido para <code class="px-1 py-0.5 rounded bg-slate-200/70 text-slate-700 text-xs">prototype-legacy.js</code> (não carregado), apenas como referência histórica.</p>
+    </div>
+  </div>
+  <div class="text-center text-xs text-slate-400 pb-8">Feito com Tailwind CSS + JavaScript puro · sem backend · sem build step.</div>
+</footer>
+
+<!-- ============================================================= -->
+<!-- ============================================================= -->
+<!-- DATA + ENGINE + RENDER                                         -->
+<!-- ============================================================= -->
+<!-- ============================================================= -->
+<script src="./worldcup-data.js"></script>
+<script src="./app.js"></script>
+</body>
+</html>
