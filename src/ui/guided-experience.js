@@ -1,5 +1,7 @@
 ﻿"use strict";
 
+let journeyNewsTimer = null;
+
 function startNewSimulation(){
   appState.draftTeam=null; appState.teamSearch=""; appState.view="picker-team";
   renderTeamPickerIntro();
@@ -22,8 +24,13 @@ function changeFavoriteTeam(){ startNewSimulation(); }
 // reinicia o PROGRESSO da simulação ativa (revive a campanha do zero)
 function resetGuidedExperience(){
   const r=activeRecord();
-  if(r){ r.revealed=0; r.finished=false; r.dashboardUnlocked=false; persistSims(); }
+  if(r){ r.revealed=0; r.finished=false; r.dashboardUnlocked=false; r.dayPhase="morning"; persistSims(); }
   appState.view="journey";
+  renderFavoriteTeamJourney();
+}
+function advanceToNextMorning(){
+  const r=activeRecord();
+  if(r){ r.dayPhase="morning"; persistSims(); }
   renderFavoriteTeamJourney();
 }
 function openFullDashboard(){
@@ -207,7 +214,6 @@ function progressiveCampaign(record){
     html+=`<div class="rounded-3xl p-5 ${cs.status==="champion"?'bg-gold-500/15 border border-gold-400/40':'bg-usared/10 border border-usared/20'}">
       <div class="font-display font-extrabold text-lg flex items-center gap-2">${ic(cs.status==="champion"?'trophy':'flag','w-5 h-5')} ${cs.title}</div>
       <p class="mt-1 text-slate-600 leading-relaxed">${cs.text}</p>
-      <button id="campaignDashboard" class="btn-premium text-white font-extrabold rounded-2xl px-5 py-3 mt-4">${ic('layout-dashboard','w-4 h-4')} Ver Copa completa</button>
     </div>`;
   }
   html+=`</div>`;
@@ -230,6 +236,227 @@ function savedSimsPanel(){
     </div>
     <button id="newSimFromJourney" class="mt-3 w-full glass rounded-2xl px-4 py-3 font-extrabold text-slate-700 flex items-center justify-center gap-2">${ic('plus','w-4 h-4')} Nova simulação</button>`;
 }
+function favoriteGroup(sim, team){
+  return sim.groups.find(g=>g.teams.includes(team)) || null;
+}
+function journeyVisibleContext(record){
+  const sim=simObjFor(record), team=record.favoriteTeam;
+  const matches=getTeamMatches(sim,team);
+  const revealed=Math.min(record.revealed, matches.length);
+  const finished=revealed>=matches.length;
+  const dayPhase = finished ? "night" : (record.dayPhase==="night" ? "night" : "morning");
+  const revealedMatches=matches.slice(0,revealed);
+  const nextMatch=finished ? null : matches[revealed];
+  const groupMatches=matches.filter(isGroupStage);
+  const groupRevealed=revealedMatches.filter(isGroupStage);
+  const currentRound = groupRevealed.length ? Math.max(...groupRevealed.map(m=>m.round||0)) : 0;
+  const favGroup=favoriteGroup(sim,team);
+  const allPartialGroups=partialStandings(sim, currentRound);
+  const partialGroup=favGroup ? allPartialGroups.find(g=>g.letter===favGroup.letter) : null;
+  return {sim, team, matches, revealed, finished, dayPhase, revealedMatches, nextMatch, groupMatches, groupRevealed, currentRound, favGroup, partialGroup, allPartialGroups};
+}
+function journeyQuickSituation(ctx){
+  const {sim, team, revealed, finished, dayPhase, revealedMatches, nextMatch, partialGroup}=ctx;
+  const last=revealedMatches[revealedMatches.length-1];
+  if(finished){
+    const cs=campaignSummary(sim,team);
+    return {tone:cs.status, eyebrow:"Noite · Jornada concluída", title:cs.title, text:cs.text};
+  }
+  if(dayPhase==="morning"){
+    if(!nextMatch) return {tone:"ready", eyebrow:"Manhã", title:"Aguardando próximo capítulo", text:`${flag(team)} ${team} ainda não tem um novo jogo aberto nesta jornada.`};
+    const stage=isGroupStage(nextMatch) ? `Rodada ${nextMatch.round || revealed+1}` : nextMatch.stage;
+    return {tone:"ready", eyebrow:`Manhã · ${stage}`, title:`Preparação contra ${nextMatch.opponent}`, text:`${flag(team)} ${team} se prepara para enfrentar ${flag(nextMatch.opponent)} ${nextMatch.opponent}. As notícias agora são de pré-jogo.`};
+  }
+  const row=partialGroup?.table.find(r=>r.team===team);
+  if(last){
+    const won=last.favoriteWon;
+    const tone=won?"alive":last.favoriteDrew?"ready":"danger";
+    return {tone, eyebrow:`Noite · ${last.stage}`, title:`Pós-jogo: ${scoreLine(last)}`, text:`${flag(last.home)} ${last.home} ${scoreLine(last)} ${flag(last.away)} ${last.away}. ${row?`${team} tem ${row.P} ponto(s), saldo ${row.SG>0?"+":""}${row.SG}. `:""}As notícias agora repercutem resultados, atuações e tabela do dia.`};
+  }
+  return {tone:"alive", eyebrow:"Noite", title:"Rodada em análise", text:"Acompanhe a repercussão antes de avançar para a próxima manhã."};
+}
+function newsPlayer(team, offset=0){
+  const players=teamMeta[team]?.keyPlayers || TEAMS[team]?.sq?.map(p=>p[0]) || [];
+  return players[offset % Math.max(players.length,1)] || "o camisa 10";
+}
+function matchResultText(match){
+  if(!match) return "sem resultado";
+  return `${match.home} ${scoreLine(match)} ${match.away}`;
+}
+function groupRoundMatches(sim, round, excludeTeam=null){
+  const r=Math.max(1, Math.min(round || 1, 3));
+  return sim.groups.flatMap(g=>g.matches.map(m=>({...m, group:g.letter})))
+    .filter(m=>(m.round||0)===r && (!excludeTeam || (m.home!==excludeTeam && m.away!==excludeTeam)));
+}
+function pickMatch(matches, index=0){
+  return matches.length ? matches[index % matches.length] : null;
+}
+function journeyNewsItems(ctx){
+  const {sim, team, revealed, finished, revealedMatches, nextMatch, partialGroup, allPartialGroups, currentRound}=ctx;
+  const last=revealedMatches[revealedMatches.length-1];
+  const row=partialGroup?.table.find(r=>r.team===team);
+  const groupRivals=(partialGroup?.table||[]).filter(r=>r.team!==team).slice(0,3).map(r=>r.team);
+  const key=newsPlayer(team,0);
+  const secondKey=newsPlayer(team,1);
+  const lastScore=last ? `${last.home} ${scoreLine(last)} ${last.away}` : "";
+  const won=last?.favoriteWon, lost=last && !last.favoriteWon && !last.favoriteDrew;
+  const roundLabel = nextMatch
+    ? (isGroupStage(nextMatch) ? `Rodada ${nextMatch.round || currentRound+1} do grupo` : nextMatch.stage)
+    : (last ? (isGroupStage(last) ? `Rodada ${last.round || currentRound} do grupo` : last.stage) : "Pré-jogo");
+  const nextLine = nextMatch ? `${nextMatch.home} x ${nextMatch.away}` : "Jornada concluída";
+  const lead = last ? `Após ${lastScore},` : `Antes da estreia,`;
+  const newsRound = Math.max(1, Math.min(currentRound || nextMatch?.round || 1, 3));
+  const globalGroups = (allPartialGroups?.length ? allPartialGroups : partialStandings(sim, newsRound))
+    .filter(g=>g.letter !== partialGroup?.letter);
+  const groupLeaders = globalGroups.map(g=>({group:g, row:g.table[0]})).filter(x=>x.row).slice(0,4);
+  const tightGroup = globalGroups
+    .map(g=>({group:g, first:g.table[0], second:g.table[1]}))
+    .filter(x=>x.first && x.second)
+    .sort((a,b)=>(a.first.P-a.second.P)-(b.first.P-b.second.P))[0];
+  const otherA = groupLeaders[0]?.row?.team || groupRivals[0] || team;
+  const otherB = groupLeaders[1]?.row?.team || groupRivals[1] || team;
+  const otherC = tightGroup?.second?.team || groupLeaders[2]?.row?.team || groupRivals[2] || team;
+  const otherD = groupLeaders[3]?.row?.team || otherA;
+  if(ctx.dayPhase==="morning"){
+    const prepMatch=nextMatch;
+    const opponent=prepMatch?.opponent || groupRivals[0] || otherA;
+    return [
+      {type:"good", section:`Manhã · ${roundLabel}`, tag:"PREPARAÇÃO", title:`${flag(team)} ${team} ajusta plano para o jogo`, text:`A comissão de ${TEAMS[team].coach} fecha os últimos detalhes antes de encarar ${opponent}.`, meta:nextLine},
+      {type:"good", section:`Manhã · ${roundLabel}`, tag:"CRAQUE", title:`${flag(team)} ${key} chega como trunfo`, text:`O jogador é tratado internamente como a peça capaz de mudar o ritmo da partida.`, meta:"Pré-jogo"},
+      {type:"good", section:`Manhã · ${roundLabel}`, tag:"TREINO", title:`${flag(team)} ${secondKey} anima bastidores`, text:`A atividade final aumenta a confiança do elenco antes do compromisso do dia.`, meta:row?`${row.P} ponto(s), SG ${row.SG>0?"+":""}${row.SG}`:"Campanha zerada"},
+      {type:"bad", section:`Manhã · ${roundLabel}`, tag:"DÚVIDA FÍSICA", title:`${flag(team)} ${newsPlayer(team,2)} preocupa comissão`, text:`A condição física vira assunto de bastidor e pode alterar o plano inicial da seleção.`, meta:"Monitoramento até o jogo"},
+      {type:"bad", section:`Manhã · ${roundLabel}`, tag:"CLIMA DE PRESSÃO", title:`${flag(opponent)} ${opponent} promete jogo duro`, text:`O adversário tenta transformar a preparação em pressão e levar a partida para detalhes.`, meta:nextLine},
+      {type:"good", section:`Manhã · Rodada ${newsRound}`, tag:"PANORAMA", title:`${flag(otherA)} ${otherA} chega embalado em outro grupo`, text:`A seleção aparece como destaque de preparação entre os jogos paralelos da rodada.`, meta:groupLeaders[0]?`Grupo ${groupLeaders[0].group.letter}`:"Central da Copa"},
+      {type:"bad", section:`Manhã · Rodada ${newsRound}`, tag:"BASTIDOR", title:`${flag(otherB)} ${newsPlayer(otherB,0)} vira dúvida antes do jogo`, text:`O nome mais observado da seleção passa a manhã cercado de expectativa.`, meta:groupLeaders[1]?`Grupo ${groupLeaders[1].group.letter}`:"Pré-jogo geral"},
+      {type:"good", section:`Manhã · Rodada ${newsRound}`, tag:"FAVORITO", title:`${flag(otherC)} ${otherC} tenta confirmar força`, text:`A seleção entra no dia com cobrança por protagonismo e controle da partida.`, meta:tightGroup?`Briga com ${tightGroup.first.team}`:"Rodada geral"},
+      {type:"bad", section:`Manhã · Rodada ${newsRound}`, tag:"ALERTA", title:`${flag(otherD)} ${otherD} teme tropeço`, text:`O clima antes da bola rolar é de cautela contra uma possível zebra.`, meta:`${newsPlayer(otherD,1)} sob cobrança`},
+      {type:"good", section:`Manhã · ${roundLabel}`, tag:"AMBIENTE", title:`${flag(team)} torcida empurra a seleção`, text:`O clima de jogo cresce e vira combustível para o elenco antes da partida.`, meta:nextLine},
+    ];
+  }
+  const playedRound = Math.max(1, Math.min(last?.round || currentRound || newsRound, 3));
+  const roundMatches = groupRoundMatches(sim, playedRound, team);
+  const gm1=pickMatch(roundMatches,0), gm2=pickMatch(roundMatches,1), gm3=pickMatch(roundMatches,2), gm4=pickMatch(roundMatches,3);
+  const lastWinner=getMatchWinnerTeam(last);
+  const decisiveTeam=lastWinner || team;
+  return [
+    {type:won?"good":"bad", section:`Noite · ${last?.stage || roundLabel}`, tag:"RESULTADO", title:won?`${flag(team)} ${team} vence e respira na Copa`:`${flag(team)} ${team} sai pressionado do jogo`, text:last?`${matchResultText(last)} vira o assunto central da noite.`:"A rodada termina com clima de análise.", meta:row?`${row.P} ponto(s), SG ${row.SG>0?"+":""}${row.SG}`:"Pós-jogo"},
+    {type:"good", section:`Noite · ${last?.stage || roundLabel}`, tag:"DECISIVO", title:`${flag(decisiveTeam)} ${newsPlayer(decisiveTeam,0)} marca a noite`, text:`O jogador vira personagem da rodada depois do resultado mais recente.`, meta:last?matchResultText(last):"Pós-jogo"},
+    {type:lost?"bad":"good", section:`Noite · ${last?.stage || roundLabel}`, tag:"REPERCUSSÃO", title:lost?`${flag(team)} ${team} encara cobrança pesada`:`${flag(team)} ${team} ganha confiança no vestiário`, text:lost?`O pós-jogo tem tom de cobrança e revisão de plano.`:`O elenco deixa a noite com sensação de caminho possível.`, meta:nextLine},
+    {type:"bad", section:`Noite · ${last?.stage || roundLabel}`, tag:"VEXAME?", title:`${flag(team)} ${newsPlayer(team,1)} vira alvo de análise`, text:`A atuação individual entra no debate da noite e divide opiniões na comissão.`, meta:last?matchResultText(last):"Análise"},
+    {type:"good", section:`Noite · Rodada ${playedRound}`, tag:"TABELA DO DIA", title:`${flag(otherA)} ${otherA} fecha a noite em destaque`, text:`A tabela parcial dos grupos ganha novo desenho depois dos resultados do dia.`, meta:groupLeaders[0]?`Grupo ${groupLeaders[0].group.letter}`:"Tabela parcial"},
+    {type:"bad", section:`Noite · Rodada ${playedRound}`, tag:"ZEBRA", title:gm1?`${flag(getMatchWinnerTeam(gm1)||gm1.home)} ${getMatchWinnerTeam(gm1)||gm1.home} mexe com a rodada`:`${flag(otherB)} ${otherB} escapa de crise`, text:gm1?`${matchResultText(gm1)} entra no pacote de resultados paralelos.`:`A seleção deixa a noite sem tranquilidade total.`, meta:gm1?`Grupo ${gm1.group}`:"Pós-jogo geral"},
+    {type:"good", section:`Noite · Rodada ${playedRound}`, tag:"ARTILHEIRO", title:`${flag(otherB)} ${newsPlayer(otherB,0)} aparece nos holofotes`, text:`O nome ganha manchetes depois de uma rodada cheia de placares importantes.`, meta:gm2?matchResultText(gm2):"Rodada paralela"},
+    {type:"bad", section:`Noite · Rodada ${playedRound}`, tag:"TROPEÇO", title:gm3?`${flag(gm3.home)} ${gm3.home} vê resultado virar problema`:`${flag(otherC)} ${otherC} perde margem`, text:gm3?`${matchResultText(gm3)} aumenta a pressão por resposta imediata.`:`A seleção entra na próxima manhã com menos conforto.`, meta:gm3?`Grupo ${gm3.group}`:"Tabela"},
+    {type:"good", section:`Noite · Rodada ${playedRound}`, tag:"CLASSIFICAÇÃO", title:`${flag(otherC)} ${otherC} esquenta briga da chave`, text:`A noite termina com a seleção no centro dos cálculos de classificação.`, meta:tightGroup?`${tightGroup.first.team} e ${otherC}`:"Grupo aberto"},
+    {type:"bad", section:`Noite · Rodada ${playedRound}`, tag:"CRISE", title:gm4?`${flag(gm4.away)} ${gm4.away} fecha o dia sob suspeita`:`${flag(otherD)} ${otherD} vira assunto negativo`, text:gm4?`${matchResultText(gm4)} deixa perguntas para a próxima manhã.`:`A seleção precisa responder rápido para não perder força.`, meta:gm4?`Grupo ${gm4.group}`:`${newsPlayer(otherD,1)} cobrado`},
+  ];
+}
+function renderJourneyNews(ctx){
+  const items=journeyNewsItems(ctx);
+  return `<div class="journey-hero-card journey-news-card guided-card rounded-[2rem] p-4 guided-enter">
+    <div class="flex items-center justify-between gap-3">
+      <div>
+        <div class="text-[11px] uppercase tracking-widest font-extrabold text-slate-400">Notícias</div>
+        <h2 class="font-display font-extrabold text-2xl">Central da Copa</h2>
+      </div>
+      ${ic('newspaper','w-6 h-6 text-usablue')}
+    </div>
+    <div class="journey-news-window mt-3" id="journeyNewsWindow">
+      <div class="journey-news-stage" id="journeyNewsStage">
+        ${items.map((n,i)=>`<article class="journey-news-item ${n.type} ${i===0?'is-active':''}" data-news-index="${i}">
+          <div class="journey-news-paperhead">
+            <span>${n.section}</span>
+            <span>Central da Copa</span>
+          </div>
+          <div class="journey-news-tag">${n.tag}</div>
+          <h3>${n.title}</h3>
+          <p>${n.text}</p>
+          <div class="journey-news-meta">${n.meta}</div>
+        </article>`).join("")}
+      </div>
+    </div>
+    <div class="mt-3 flex items-center justify-between gap-3">
+      <div class="flex gap-1.5" id="journeyNewsDots">
+        ${items.map((_,i)=>`<span class="journey-news-dot ${i===0?'is-active':''}" data-news-dot="${i}"></span>`).join("")}
+      </div>
+      <div class="text-[10px] uppercase tracking-widest font-extrabold text-slate-400"><span id="journeyNewsCount">1</span>/${items.length}</div>
+    </div>
+  </div>`;
+}
+function wireJourneyNewsCarousel(){
+  const cards=[...document.querySelectorAll(".journey-news-item")];
+  if(!cards.length) return;
+  const dots=[...document.querySelectorAll(".journey-news-dot")];
+  const count=$("#journeyNewsCount");
+  let active=0;
+  const show=i=>{
+    active=(i+cards.length)%cards.length;
+    cards.forEach((card,idx)=>card.classList.toggle("is-active", idx===active));
+    dots.forEach((dot,idx)=>dot.classList.toggle("is-active", idx===active));
+    if(count) count.textContent=String(active+1);
+  };
+  dots.forEach(dot=>dot.onclick=()=>show(Number(dot.dataset.newsDot)));
+  journeyNewsTimer=setInterval(()=>show(active+1),6000);
+}
+function renderJourneySituation(ctx){
+  const {team, revealed, dayPhase, nextMatch, partialGroup, groupMatches, revealedMatches}=ctx;
+  const lastRevealed = revealedMatches[revealedMatches.length-1];
+  const inGroups = nextMatch ? isGroupStage(nextMatch) : lastRevealed && isGroupStage(lastRevealed) && revealed <= groupMatches.length;
+  if(dayPhase==="morning" && nextMatch){
+    return `<div class="journey-hero-card guided-card rounded-[2rem] p-4 guided-enter">
+      <div class="flex items-center justify-between gap-3 mb-3">
+        <div>
+          <div class="text-[11px] uppercase tracking-widest font-extrabold text-slate-400">Manhã de jogo</div>
+          <h2 class="font-display font-extrabold text-2xl">Próxima partida</h2>
+        </div>
+        ${ic('sun','w-6 h-6 text-gold-600')}
+      </div>
+      <div class="rounded-3xl bg-white/70 border border-white/75 p-4">
+        <div class="text-[10px] uppercase tracking-widest font-extrabold text-slate-400">${nextMatch.stage}${nextMatch.matchNo?` · M${nextMatch.matchNo}`:""}</div>
+        <div class="mt-3 grid grid-cols-[1fr_auto_1fr] items-center gap-3">
+          <div class="text-right font-extrabold">${flag(nextMatch.home)} ${nextMatch.home}</div>
+          <div class="rounded-xl bg-slate-100 px-2 py-1 text-xs font-black text-slate-400">VS</div>
+          <div class="font-extrabold">${flag(nextMatch.away)} ${nextMatch.away}</div>
+        </div>
+        <div class="mt-3 text-sm font-semibold text-slate-500">${nextMatch.city} · ${nextMatch.venue}</div>
+      </div>
+      ${partialGroup?`<div class="mt-3">${compactGroupCard(partialGroup, team)}</div>`:""}
+    </div>`;
+  }
+  if(inGroups && partialGroup){
+    return `<div class="journey-hero-card guided-card rounded-[2rem] p-4 guided-enter">
+      <div class="flex items-center justify-between gap-3 mb-3">
+        <div>
+          <div class="text-[11px] uppercase tracking-widest font-extrabold text-slate-400">${dayPhase==="night"?"Noite · Tabela do dia":"Tabela"}</div>
+          <h2 class="font-display font-extrabold text-2xl">Grupo ${partialGroup.letter}</h2>
+        </div>
+        <span class="text-[11px] font-extrabold text-slate-400">${partialGroup.played}/3 rodadas</span>
+      </div>
+      ${compactGroupCard(partialGroup, team)}
+      <p class="mt-3 text-xs font-semibold text-slate-500">${dayPhase==="night"?"Resultados do dia já entraram na classificação parcial.":"A tabela acompanha apenas o que já foi revelado na jornada."}</p>
+    </div>`;
+  }
+  const koMatches=revealedMatches.filter(m=>!isGroupStage(m));
+  return `<div class="journey-hero-card guided-card rounded-[2rem] p-4 guided-enter">
+    <div class="flex items-center justify-between gap-3 mb-3">
+      <div>
+        <div class="text-[11px] uppercase tracking-widest font-extrabold text-slate-400">${dayPhase==="night"?"Noite · Mata-mata":"Mata-mata"}</div>
+        <h2 class="font-display font-extrabold text-2xl">Estado da chave</h2>
+      </div>
+      ${ic('git-fork','w-6 h-6 text-mxgreen')}
+    </div>
+    <div class="space-y-2.5">
+      ${koMatches.length?koMatches.slice(-4).map(m=>`<div class="rounded-2xl bg-white/65 border border-white/70 p-3">
+        <div class="text-[10px] uppercase tracking-widest font-extrabold text-slate-400">${m.stage}</div>
+        <div class="mt-1 font-extrabold text-sm leading-tight">${flag(m.home)} ${m.home} <span class="tnum px-1.5">${scoreLine(m)}</span> ${flag(m.away)} ${m.away}</div>
+      </div>`).join(""):`<div class="rounded-2xl bg-white/65 border border-white/70 p-4 text-sm font-semibold text-slate-500">O mata-mata ainda não começou para ${flag(team)} ${team}.</div>`}
+      ${nextMatch&&!isGroupStage(nextMatch)?`<div class="rounded-2xl border border-mxgreen/25 bg-mxgreen/10 p-3">
+        <div class="text-[10px] uppercase tracking-widest font-extrabold text-mxgreen">Próximo confronto</div>
+        <div class="mt-1 font-extrabold text-sm leading-tight">${flag(nextMatch.home)} ${nextMatch.home} <span class="px-1.5 text-slate-400">x</span> ${flag(nextMatch.away)} ${nextMatch.away}</div>
+      </div>`:""}
+    </div>
+  </div>`;
+}
 
 function setGuidedVisibility(showGuided){
   $("#guidedExperience").classList.toggle("hidden", !showGuided);
@@ -238,6 +465,10 @@ function setGuidedVisibility(showGuided){
   $("#siteFooter").classList.toggle("hidden", showGuided);
 }
 function renderGuided(html){
+  if(journeyNewsTimer){
+    clearInterval(journeyNewsTimer);
+    journeyNewsTimer = null;
+  }
   setGuidedVisibility(true);
   $("#guidedExperience").innerHTML = `<section class="guided-shell">${html}</section>`;
   paintIcons();
@@ -352,45 +583,48 @@ function renderFavoriteTeamJourney(){
   const revealed=Math.min(record.revealed, matches.length);
   const finished = revealed>=matches.length;
   if(finished) { record.finished=true; persistSims(); }
-  // status SEM SPOILER: só revela o desfecho quando a jornada termina
-  let statusBox;
-  if(finished){
-    const cs=campaignSummary(sim,team);
-    statusBox=`<div class="rounded-3xl p-5 ${cs.status==="champion"?'bg-gold-500/15 border border-gold-400/40':'bg-usared/10 border border-usared/20'}">
-      <div class="font-display font-extrabold text-xl">${cs.title}</div><p class="mt-2 text-slate-600 leading-relaxed">${cs.text}</p></div>`;
-  } else if(revealed===0){
-    statusBox=`<div class="rounded-3xl p-5 bg-usablue/8 border border-usablue/20">
-      <div class="font-display font-extrabold text-xl">Sua Copa começa agora.</div>
-      <p class="mt-2 text-slate-600 leading-relaxed">Os resultados serão revelados <b>jogo a jogo</b>. Nada de placares, campeão ou chaveamento antes da hora — só o que você viver.</p></div>`;
-  } else {
-    statusBox=`<div class="rounded-3xl p-5 bg-mxgreen/10 border border-mxgreen/20">
-      <div class="font-display font-extrabold text-xl">Campanha em andamento</div>
-      <p class="mt-2 text-slate-600 leading-relaxed">${revealed} jogo(s) disputado(s). Simule o próximo para continuar a jornada de ${flag(team)} ${team}.</p></div>`;
-  }
+  const ctx=journeyVisibleContext(record);
+  const status=journeyQuickSituation(ctx);
+  const nextMatch=ctx.nextMatch;
+  const dayPhase=ctx.dayPhase;
   renderGuided(`
     ${renderIntroNav("journey")}
-    <div class="max-w-7xl mx-auto grid xl:grid-cols-[.86fr_1.14fr] gap-6 items-start">
-      <div class="guided-card rounded-[2rem] p-7 sm:p-9 guided-enter ${finished&&sim.champion===team?'confetti-soft':''}">
+    <div class="max-w-7xl mx-auto">
+      <div class="grid xl:grid-cols-[1fr_1.08fr_1fr] gap-5 items-stretch">
+        <div class="journey-hero-card guided-card rounded-[2rem] p-4 sm:p-5 guided-enter ${finished&&sim.champion===team?'confetti-soft':''}">
         <div class="flex items-center justify-between gap-4">
           ${renderSimulationTypeBadge(type)}
-          <button id="journeyTypeBack" class="text-xs font-extrabold text-slate-500 hover:text-ink">Trocar tipo</button>
+          <div class="flex items-center gap-2">
+            <span class="px-3 py-1.5 rounded-full text-[10px] uppercase tracking-widest font-extrabold ${dayPhase==="morning"?'bg-gold-500/15 text-gold-700':'bg-ink text-white'}">${dayPhase==="morning"?'Manhã':'Noite'}</span>
+            <button id="journeyTypeBack" class="text-xs font-extrabold text-slate-500 hover:text-ink">Trocar tipo</button>
+          </div>
         </div>
-        <div class="mt-8 flex items-center gap-5">
+        <div class="mt-5 flex items-center gap-4">
           ${flag(team,'flag-xl')}
           <div>
-            <h1 class="font-display font-extrabold text-4xl leading-tight">${team} na Simulação ${profile.label}</h1>
+            <h1 class="font-display font-extrabold text-3xl leading-tight">${team}</h1>
             <p class="mt-2 text-slate-500 font-semibold">${teamMeta[team].confederation} · ${teamMeta[team].status} · técnico: ${TEAMS[team].coach}</p>
           </div>
         </div>
-        <div class="mt-7">${statusBox}</div>
-        <div class="mt-7 grid sm:grid-cols-2 gap-3">
-          <button id="startJourney" class="btn-premium text-white font-extrabold rounded-2xl px-5 py-3.5" ${matches.length && !finished?'':'disabled'}>${revealed===0?'Começar jornada':'Simular próximo jogo'}</button>
-          <button id="askDashboard" class="glass rounded-2xl px-5 py-3.5 font-extrabold text-slate-700 disabled:opacity-40 disabled:pointer-events-none" ${finished?'':'disabled'} title="${finished?'':'Disponível ao fim da jornada'}">Ver Copa completa</button>
+        <div class="mt-4 journey-status ${status.tone}">
+          <div class="text-[10px] uppercase tracking-widest font-extrabold opacity-70">${status.eyebrow}</div>
+          <div class="mt-1 font-display font-extrabold text-xl">${status.title}</div>
+          <p class="mt-2 text-sm leading-relaxed">${status.text}</p>
+        </div>
+        <div class="mt-4 grid gap-3">
+          ${finished
+            ? `<button id="askDashboard" class="btn-premium text-white font-extrabold rounded-2xl px-5 py-3.5">${ic('layout-dashboard','w-4 h-4')} Ver Copa completa</button>`
+            : dayPhase==="morning"
+              ? `<button id="startJourney" class="btn-premium text-white font-extrabold rounded-2xl px-5 py-3.5" ${matches.length?'':'disabled'}>${revealed===0?'Jogar estreia':nextMatch?`Jogar ${nextMatch.stage}`:'Jogar próxima partida'}</button>`
+              : `<button id="advanceMorning" class="btn-premium text-white font-extrabold rounded-2xl px-5 py-3.5">${ic('sun','w-4 h-4')} Avançar para a próxima manhã</button>`}
         </div>
         ${savedSimsPanel()}
-        <button id="resetGuidedSmall" class="mt-4 text-xs font-extrabold text-slate-400 hover:text-usared">Reiniciar progresso desta simulação</button>
+        <button id="resetGuidedSmall" class="mt-3 text-xs font-extrabold text-slate-400 hover:text-usared">Reiniciar progresso desta simulação</button>
       </div>
-      <div class="guided-card rounded-[2rem] p-4 sm:p-5 guided-enter">
+      ${renderJourneyNews(ctx)}
+      ${renderJourneySituation(ctx)}
+    </div>
+      <div class="guided-card rounded-[2rem] p-4 sm:p-5 guided-enter mt-5">
         <div class="mb-4">
           <div class="text-[11px] uppercase tracking-widest font-extrabold text-slate-400">Campanha de ${team}</div>
           <div class="font-display font-extrabold text-2xl">Jogo a jogo</div>
@@ -405,8 +639,10 @@ function renderFavoriteTeamJourney(){
   document.querySelectorAll(".del-sim").forEach(b=> b.onclick=()=>{ if(confirm("Excluir esta simulação?")){ deleteSimulation(b.dataset.id); renderApp(); } });
   if($("#newSimFromJourney")) $("#newSimFromJourney").onclick=startNewSimulation;
   if($("#campaignDashboard")) $("#campaignDashboard").onclick=openFullDashboard;
-  $("#startJourney").onclick=()=>{ if(matches[revealed] && !finished) openMatchSimulator(matches[revealed], revealed); };
-  $("#askDashboard").onclick=()=>{ if(finished) renderDashboardConfirmation(); };
+  wireJourneyNewsCarousel();
+  if($("#startJourney")) $("#startJourney").onclick=()=>{ if(matches[revealed] && !finished) openMatchSimulator(matches[revealed], revealed); };
+  if($("#advanceMorning")) $("#advanceMorning").onclick=advanceToNextMorning;
+  if($("#askDashboard")) $("#askDashboard").onclick=()=>{ if(finished) renderDashboardConfirmation(); };
   $("#journeyTypeBack").onclick=changeSimulationType;
   $("#resetGuidedSmall").onclick=resetGuidedExperience;
 }

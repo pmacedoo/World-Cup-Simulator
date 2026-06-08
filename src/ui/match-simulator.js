@@ -22,6 +22,19 @@ function matchPhaseLabel(minute, match){
   if(minute>=45) return "Intervalo";
   return "1º tempo";
 }
+function matchStageTone(match){
+  const stage = match.stage || "";
+  const round = stage.includes("Rodada") ? (stage.match(/Rodada\s+(\d+)/)?.[1] || "") : "";
+  const label = match.matchNo ? `M${match.matchNo} · ${stage}` : stage;
+  if(stage.includes("Final")) return {label, cls:"stage-final"};
+  if(stage.includes("Semifinal")) return {label, cls:"stage-semi"};
+  if(stage.includes("Quartas")) return {label, cls:"stage-qf"};
+  if(stage.includes("Oitavas")) return {label, cls:"stage-r16"};
+  if(stage.includes("32")) return {label, cls:"stage-r32"};
+  if(round==="3") return {label, cls:"stage-group-3"};
+  if(round==="2") return {label, cls:"stage-group-2"};
+  return {label, cls:"stage-group-1"};
+}
 function openMatchSimulator(match, journeyIndex=0){
   closeModal();
   appState.currentSimulatedMatch={match, journeyIndex};
@@ -38,6 +51,7 @@ function openMatchSimulator(match, journeyIndex=0){
   const profile=profileFor(type);
   const fav=getFavoriteTeam();
   const nextMatch=getTeamMatches(currentSim(),fav)[journeyIndex+1];
+  const stageTone=matchStageTone(match);
   $("#matchSimulatorBox").innerHTML=`
     <button class="absolute top-4 right-4 text-slate-400 hover:text-ink" data-close>✕</button>
     <div class="flex flex-wrap items-center justify-between gap-3 pr-8">
@@ -53,6 +67,7 @@ function openMatchSimulator(match, journeyIndex=0){
         <div class="font-display font-extrabold text-xl sm:text-3xl">${match.home}</div>
       </div>
       <div class="text-center">
+        <div id="simStageBadge" class="match-stage-badge ${stageTone.cls} mx-auto">${stageTone.label}</div>
         <div id="simClock" class="text-xs uppercase tracking-widest font-extrabold text-slate-400">00'</div>
         <div id="simScore" class="match-sim-score mt-2 rounded-[1.5rem] bg-ink text-white px-5 sm:px-8 py-3 font-display font-extrabold text-3xl sm:text-5xl tnum">0 x 0</div>
         <div id="simPhase" class="mt-2 text-xs font-extrabold text-slate-500">${matchPhaseLabel(0,match)}</div>
@@ -65,7 +80,8 @@ function openMatchSimulator(match, journeyIndex=0){
     <div class="mt-6 h-3 rounded-full bg-slate-200/70 overflow-hidden">
       <div id="simProgress" class="h-full rounded-full" style="width:0%;background:linear-gradient(90deg,${profile.color},#1f7a4d,#c8962f)"></div>
     </div>
-    <div class="mt-5 grid lg:grid-cols-[1fr_.78fr] gap-4">
+    <div id="pkMount" class="mt-5"></div>
+    <div id="simInfoGrid" class="mt-5 grid lg:grid-cols-[1fr_.78fr] gap-4">
       <div class="rounded-3xl bg-white/55 border border-white/70 p-4">
         <div class="text-[11px] uppercase tracking-widest font-extrabold text-slate-400 mb-3">Eventos da partida</div>
         <div id="simTimeline" class="space-y-2 min-h-[220px]"></div>
@@ -75,7 +91,6 @@ function openMatchSimulator(match, journeyIndex=0){
         <div id="simSummary" class="mt-3 text-sm text-slate-600 leading-relaxed">A transmissão acelerada vai começar. O placar final só aparece quando os eventos acontecerem.</div>
       </div>
     </div>
-    <div id="pkMount" class="mt-5"></div>
     <div class="mt-5 flex flex-wrap justify-between gap-3">
       <div class="flex flex-wrap gap-2">
         <button id="restartMatchSim" class="glass rounded-2xl px-4 py-2.5 font-bold text-slate-700">Reiniciar simulação</button>
@@ -96,6 +111,7 @@ function simulateMatch(match){
   if(appState.matchTimer) clearInterval(appState.matchTimer);
   stopShootout();                                  // limpa disputa anterior, se houver
   const pkMount=$("#pkMount"); if(pkMount) pkMount.innerHTML="";
+  const infoGrid=$("#simInfoGrid"); if(infoGrid) infoGrid.classList.remove("hidden");
   appState.matchAnimationStarted=true;
   const totalMs = match.pens ? 28000 : match.aet ? 25000 : 20000;
   const virtualMax = match.aet ? 120 : 90;
@@ -172,9 +188,39 @@ const PK_SHOT_MS   = 800;    // animação do chute entrando no gol
 const PK_RESULT_MS = 1450;   // exibe o resultado antes da próxima cobrança
 // posição (% dentro do mini-gol) de cada zona de chute
 const PK_ZONE_XY = {
-  "top-left":[20,30],"top-center":[50,25],"top-right":[80,30],
-  "bottom-left":[22,72],"bottom-center":[50,77],"bottom-right":[78,72],
+  "top-left":[27,42],"top-center":[50,40],"top-right":[73,42],
+  "bottom-left":[28,63],"bottom-center":[50,64],"bottom-right":[72,63],
 };
+const PK_ZONE_OFFSETS = [
+  [-3,-2],[2,-3],[4,1],[-2,3],[1,2],[-4,0],
+  [3,3],[-1,-4],[0,4],[5,-2],[-5,2],[2,0],
+];
+const PK_ZONE_LABELS = {
+  "top-left":"alto esquerdo",
+  "top-center":"alto centro",
+  "top-right":"alto direito",
+  "bottom-left":"baixo esquerdo",
+  "bottom-center":"baixo centro",
+  "bottom-right":"baixo direito",
+};
+function penaltyShotPosition(k, index){
+  const base = PK_ZONE_XY[k.shotZone] || [50,50];
+  const offset = PK_ZONE_OFFSETS[index % PK_ZONE_OFFSETS.length];
+  let x = base[0] + offset[0];
+  let y = base[1] + offset[1];
+  if(k.result==="Para fora"){
+    const side = x < 50 ? -1 : 1;
+    x = x + side * (18 + (index % 3) * 4);
+    y = y + (k.shotZone?.startsWith("top") ? -12 : 12);
+  } else if(k.result==="Na trave"){
+    x = x < 40 ? 19 : x > 60 ? 81 : x;
+    y = k.shotZone?.startsWith("top") ? 31 : 73;
+  } else if(k.result==="Defendido"){
+    x = base[0] + offset[0] * 0.6;
+    y = base[1] + offset[1] * 0.6;
+  }
+  return [clamp(x, -10, 110), clamp(y, 18, 88)];
+}
 function stopShootout(){
   (appState.penaltyTimers||[]).forEach(t=>clearTimeout(t));
   appState.penaltyTimers=[];
@@ -183,6 +229,8 @@ function startShootout(match){
   stopShootout();
   const sh=match.penalties; if(!sh) return;
   const mount=$("#pkMount"); if(!mount) return;
+  const infoGrid=$("#simInfoGrid");
+  if(infoGrid) infoGrid.classList.add("hidden");
   const fav=getFavoriteTeam(), home=match.home, away=match.away;
   mount.innerHTML = `
     <div class="pk-wrap">
@@ -198,9 +246,18 @@ function startShootout(match){
           <div id="pkDotsAway" class="pk-dots"></div>
         </div>
       </div>
-      <div class="mt-4 grid sm:grid-cols-[auto_1fr] gap-4 items-center">
-        <div class="pk-goal"><div class="absolute inset-0" id="pkGoalShots"></div></div>
-        <div class="text-center sm:text-left">
+      <div id="pkFeaturedEvent" class="pk-featured-event mt-4">Preparando a disputa…</div>
+      <div class="mt-4">
+        <div class="pk-goal" aria-label="Mapa do gol">
+          <div class="pk-goal-zone zone-tl"></div>
+          <div class="pk-goal-zone zone-tc"></div>
+          <div class="pk-goal-zone zone-tr"></div>
+          <div class="pk-goal-zone zone-bl"></div>
+          <div class="pk-goal-zone zone-bc"></div>
+          <div class="pk-goal-zone zone-br"></div>
+          <div class="pk-goal-mouth" id="pkGoalShots"></div>
+        </div>
+        <div class="mt-3 text-center">
           <div id="pkKicker" class="pk-kicker text-slate-600 min-h-[28px]">Preparando a disputa…</div>
           <div id="pkResult" class="mt-2 min-h-[30px]"></div>
           <div id="pkRound" class="mt-1 text-[11px] uppercase tracking-widest font-extrabold text-slate-400"></div>
@@ -223,11 +280,14 @@ function startShootout(match){
       $("#pkRound").innerHTML = `${i>=10?'Cobranças alternadas · ':''}Cobrança ${i+1}`;
       $("#pkKicker").className="pk-kicker prep text-slate-700";
       $("#pkKicker").innerHTML = `${flag(k.team)} <b>${k.player}</b> se prepara para a cobrança…${k.decisive?` <span class="text-gold-600 font-extrabold">· decisiva</span>`:''}`;
+      $("#pkFeaturedEvent").innerHTML = `${flag(k.team)} <b>${k.player}</b> na bola por ${k.team}`;
+      $("#pkFeaturedEvent").className = "pk-featured-event mt-4 prep";
       $("#pkResult").innerHTML="";
       await wait(PK_PREP_MS);
-      const [zx,zy]=PK_ZONE_XY[k.shotZone]||[50,50];
+      const [zx,zy]=penaltyShotPosition(k, i);
+      goalShots.innerHTML="";
       const shot=document.createElement("div");
-      shot.className=`pk-shot ${k.scored?'goal':'miss'}`;
+      shot.className=`pk-shot ${k.scored?'goal':'miss'} ${k.result==="Para fora"?'wide':''}`;
       shot.style.left=zx+"%"; shot.style.top=zy+"%";
       shot.textContent = k.scored ? "●" : "✕";
       goalShots.appendChild(shot);
@@ -239,7 +299,9 @@ function startShootout(match){
       const dot=mount.querySelector(isHome?`[data-h="${hUsed}"]`:`[data-a="${aUsed}"]`);
       if(dot) dot.classList.add(k.scored?"goal":"miss");
       if(isHome) hUsed++; else aUsed++;
-      $("#pkResult").innerHTML = `<span class="pk-result-badge ${k.scored?'goal':'miss'}">${ic(k.scored?'check':'x','w-4 h-4')} ${k.result}</span>`;
+      $("#pkResult").innerHTML = `<span class="pk-result-badge ${k.scored?'goal':'miss'}">${ic(k.scored?'check':'x','w-4 h-4')} ${k.result}</span><div class="mt-1 text-xs font-bold text-slate-400">Chute no ${PK_ZONE_LABELS[k.shotZone]||"centro do gol"}</div>`;
+      $("#pkFeaturedEvent").innerHTML = `${flag(k.team)} <b>${k.player}</b>: <span class="${k.scored?'text-mxgreen':'text-usared'}">${k.result}</span>`;
+      $("#pkFeaturedEvent").className = `pk-featured-event mt-4 ${k.scored?'goal':'miss'}`;
       paintIcons();
       await wait(PK_RESULT_MS);
     }
@@ -247,6 +309,8 @@ function startShootout(match){
     const winner=sh.winner;
     $("#pkKicker").className="pk-kicker text-slate-800";
     $("#pkKicker").innerHTML = `${flag(winner)} <b>${winner}</b> vence a disputa por ${sh.homeScore} x ${sh.awayScore}!`;
+    $("#pkFeaturedEvent").innerHTML = `${flag(winner)} <b>${winner}</b> vence a disputa por ${sh.homeScore} x ${sh.awayScore}`;
+    $("#pkFeaturedEvent").className = "pk-featured-event mt-4 goal";
     $("#pkRound").textContent="Fim da disputa";
     const box=$("#matchSimulatorBox"); if(box && winner===match.winner?.team) box.classList.add("pk-decisive");
     const summary=$("#simSummary");
