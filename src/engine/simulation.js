@@ -213,6 +213,11 @@ function simulate(seed, chaos, name, tone){
   });
 
   const groupByLetter = Object.fromEntries(groups.map(g=>[g.letter,g]));
+  const protectedTopSeedTeams = new Set(
+    FIFA_RANKING_TOP4
+      .filter(seed=>groupByLetter[seed.group]?.table[0]?.team===seed.team)
+      .map(seed=>seed.team)
+  );
   const thirdCombo = qualThirds.map(t=>t.group).sort().join("");
   const thirdSlotMap = THIRD_PLACE_MAP[thirdCombo];
   if(!thirdSlotMap) throw new Error(`Combinação de terceiros sem chave oficial: ${thirdCombo}`);
@@ -237,7 +242,7 @@ function simulate(seed, chaos, name, tone){
   function playKnockMatch(id, A, B, label, stageIdx){
     const m = playMatch(A.team, B.team, label, chaos, true, vi++);
     m.matchNo = id; m.A=A; m.B=B; m.stageIdx=stageIdx;
-    m.topSeedRule = topSeedRuleFor(A.team, B.team, stageIdx);
+    m.topSeedRule = topSeedRuleFor(A.team, B.team, stageIdx, protectedTopSeedTeams);
     const aWin = (m.ga>m.gb) || (m.pens && m.pens[0]>m.pens[1]);
     m.winner = aWin? A: B; m.loser = aWin? B: A;
     setReach(A.team, stageIdx); setReach(B.team, stageIdx);
@@ -282,7 +287,7 @@ function simulate(seed, chaos, name, tone){
   const fA = SF.matches[0].winner, fB = SF.matches[1].winner;
   const final = playMatch(fA.team, fB.team, "Final", chaos, true, 4); // MetLife
   final.matchNo=104; final.A=fA; final.B=fB; final.stageIdx=5;
-  final.topSeedRule = topSeedRuleFor(fA.team, fB.team, 5);
+  final.topSeedRule = topSeedRuleFor(fA.team, fB.team, 5, protectedTopSeedTeams);
   final.venue="MetLife Stadium"; final.city="Nova York / Nova Jersey";
   const champWin = (final.ga>final.gb)||(final.pens&&final.pens[0]>final.pens[1]);
   final.winner = champWin? fA: fB; final.loser = champWin? fB: fA;
