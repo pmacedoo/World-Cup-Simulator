@@ -97,16 +97,16 @@ function buildShootout(homeName, awayName, winnerHome, seed){
 // simula uma partida (chaos controla a variância/zebras)
 function playMatch(homeName, awayName, stage, chaos, knockout=false, vIndex=0){
   const A = teamObj(homeName), B = teamObj(awayName);
-  const base = 1.35;
+  const base = 1.1;
   const diff = (A.ovr - B.ovr);
   // gols esperados modulados por força + ruído (chaos)
   const noiseA = Math.exp((RND()-0.5)*2*chaos);
   const noiseB = Math.exp((RND()-0.5)*2*chaos);
-  let xgA = clamp(base * Math.exp(diff/14) * noiseA, 0.18, 4.2);
-  let xgB = clamp(base * Math.exp(-diff/14) * noiseB, 0.18, 4.2);
+  let xgA = clamp(base * Math.exp(diff/15) * noiseA, 0.12, 3.35);
+  let xgB = clamp(base * Math.exp(-diff/15) * noiseB, 0.12, 3.35);
   // gols do tempo regulamentar
-  let gaReg = Math.min(6, poisson(xgA));
-  let gbReg = Math.min(6, poisson(xgB));
+  let gaReg = Math.min(5, poisson(xgA));
+  let gbReg = Math.min(5, poisson(xgB));
   let gaExt = 0, gbExt = 0, aet = false, pens = null, penalties = null;
 
   if(knockout && gaReg===gbReg){
