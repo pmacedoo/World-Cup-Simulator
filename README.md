@@ -43,12 +43,27 @@ Basta abrir o **`index.html`** no navegador (duplo-clique ou arrastar para a jan
 | Arquivo | Função |
 |---|---|
 | **`index.html`** | Marcação da página, CDNs e `<link>`/`<script>` dos arquivos locais. |
-| **`styles.css`** | Todo o CSS customizado (glass, bracket, animações de partida e pênaltis, bandeiras). |
-| **`worldcup-data.js`** | **Base de dados** — define `window.WC_DATA = { TEAMS, GROUPS, ISO, THIRD_PLACE_SLOT_ORDER, THIRD_PLACE_MAP }`. |
-| **`app.js`** | **Motor de simulação + interface** (fluxo, jornada guiada, simulador, pênaltis, bracket, dashboard). |
-| **`prototype-legacy.js`** | Protótipo inicial — **não é carregado**, mantido apenas como referência histórica. |
+| **`src/styles/styles.css`** | Todo o CSS customizado (glass, bracket, animações de partida e pênaltis, bandeiras). |
+| **`src/data/worldcup-data.js`** | **Base de dados** — define `window.WC_DATA = { TEAMS, GROUPS, ISO, THIRD_PLACE_SLOT_ORDER, THIRD_PLACE_MAP }`. |
+| **`src/data/venues.js`** | Sedes oficiais usadas para distribuir partidas. |
+| **`src/engine/random.js`** | PRNG determinístico e utilidades de aleatoriedade. |
+| **`src/engine/scoring.js`** | Tipos de gol e dados auxiliares de placar. |
+| **`src/domain/bracket/top-seed-protection.js`** | Regras de proteção dos cabeças de chave no mata-mata. |
+| **`src/engine/simulation.js`** | **Motor de simulação** (partidas, grupos, classificados, mata-mata, estatísticas e prêmios). |
+| **`src/app/narrative.js`** | Texto narrativo gerado a partir dos resultados simulados. |
+| **`src/state/simulation-profiles.js`** | Perfis Realística, Épica e Dramática, com seeds, caos e metadados. |
+| **`src/state/simulation-store.js`** | Estado global da experiência, cache de simulações e persistência em `localStorage`. |
+| **`src/ui/render-helpers.js`** | Helpers de DOM, bandeiras, ícones, badges e metadados visuais das seleções. |
+| **`src/ui/guided-experience.js`** | Fluxo de escolha, jornada guiada, snapshots e progresso sem spoilers. |
+| **`src/ui/dashboard.js`** | Abas, cards principais, visão geral e painel da seleção favorita. |
+| **`src/ui/tournament-sections.js`** | Elencos, grupos, jogos, terceiros e proteção de ranking. |
+| **`src/ui/bracket.js`** | Chaveamento, cards de mata-mata e modal de detalhes de partida. |
+| **`src/ui/match-simulator.js`** | Simulador visual de partida, timeline, pênaltis e confete. |
+| **`src/ui/stats.js`** | Narrativa renderizada, estatísticas, seleção ideal e destaques. |
+| **`src/app/app.js`** | Orquestração final, filtros, navegação, scroll/reveal e inicialização. |
+| **`src/legacy/prototype-legacy.js`** | Protótipo inicial — **não é carregado**, mantido apenas como referência histórica. |
 
-Ordem de carga no `index.html`: `styles.css` → `worldcup-data.js` → `app.js`.
+Ordem de carga no `index.html`: dados → engine → narrativa → state → ui → `src/app/app.js`.
 
 ---
 
@@ -85,7 +100,7 @@ Ordem de carga no `index.html`: `styles.css` → `worldcup-data.js` → `app.js`
 
 ## 🎛️ Onde ajustar
 
-Tudo em **`app.js`**:
+Pesos e perfis em **`src/state/simulation-profiles.js`**:
 
 - **Pesos / estilo das simulações** → objeto `simulationProfiles` (`realistic`, `epic`, `dramatic`): `chaos`, `favoriteBias`, `upsetChance`, `drawChance`, `lateGoalChance`, `penaltyChance`, `extraTimeChance`, `starPlayerImpact`, etc.
 - **Duração da partida animada** → função `simulateMatch`: `const totalMs = match.pens ? 28000 : match.aet ? 25000 : 20000;`
@@ -95,7 +110,7 @@ Tudo em **`app.js`**:
 
 ## 🔄 Atualizar os dados (após convocações/sorteio oficiais)
 
-Edite apenas **`worldcup-data.js`**:
+Edite apenas **`src/data/worldcup-data.js`**:
 
 - **`TEAMS`** — por seleção: `ovr` (força), `conf` (confederação), `coach` (técnico) e `sq` (elenco) no formato `["Nome","POS",pesoDeGol,"tags"]`
   - `POS`: `GK` | `DF` | `MF` | `FW`
