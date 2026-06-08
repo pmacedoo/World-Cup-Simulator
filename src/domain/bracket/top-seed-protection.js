@@ -16,9 +16,10 @@ const FIFA_FINAL_ONLY_PAIRS = new Set([
   pairKey("Espanha","Argentina"),
   pairKey("França","Inglaterra"),
 ]);
-function topSeedRuleFor(teamA, teamB, stageIdx){
+function topSeedRuleFor(teamA, teamB, stageIdx, protectedTeams){
   const A = FIFA_TOP4_BY_TEAM[teamA], B = FIFA_TOP4_BY_TEAM[teamB];
   if(!A || !B) return null;
+  if(!protectedTeams?.has(teamA) || !protectedTeams?.has(teamB)) return null;
   const finalOnly = FIFA_FINAL_ONLY_PAIRS.has(pairKey(teamA,teamB));
   const minStageIdx = finalOnly ? 5 : 4;
   return {
@@ -43,6 +44,7 @@ function analyzeTopSeedProtection(groups, knockoutMatches){
       teams:m.topSeedRule.teams,
       ranks:m.topSeedRule.ranks,
       requiredStage:m.topSeedRule.requiredStage,
+      protectedPath:true,
       allowed:m.topSeedRule.allowed,
     } : null)
     .filter(Boolean);
