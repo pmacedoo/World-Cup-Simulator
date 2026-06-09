@@ -803,6 +803,20 @@
   html.dark-mode .type-pick-card.active .text-slate-500{color:#cbd5e1;}
   /* ---- journey clock panel ---- */
   html.dark-mode .journey-clock-panel{background:rgba(15,23,42,.58);border-color:rgba(255,255,255,.08);box-shadow:inset 0 1px 0 rgba(255,255,255,.05);}
+  /* ---- match simulator stage badge ---- */
+  html.dark-mode .match-stage-badge{background:linear-gradient(180deg,var(--stage-bg),rgba(30,41,59,.55)) !important;border-color:rgba(255,255,255,.12) !important;}
+  html.dark-mode .match-stage-badge.stage-group-1{--stage-fg:#94a3b8;}
+  html.dark-mode .match-stage-badge.stage-group-2{--stage-fg:#6ee7b7;}
+  html.dark-mode .match-stage-badge.stage-group-3{--stage-fg:#6ee7b7;}
+  html.dark-mode .match-stage-badge.stage-r32{--stage-fg:#6ee7b7;}
+  html.dark-mode .match-stage-badge.stage-r16{--stage-fg:#4ade80;}
+  html.dark-mode .match-stage-badge.stage-qf{--stage-fg:#34d399;}
+  html.dark-mode .match-stage-badge.stage-semi{--stage-fg:#34d399;}
+  html.dark-mode .match-stage-badge.stage-final{--stage-fg:#a7f3d0;}
+  /* ---- match simulator clock & phase text ---- */
+  html.dark-mode #simClock{color:#94a3b8;}
+  html.dark-mode #simPhase{color:#94a3b8;}
+  html.dark-mode .match-side{background:rgba(15,23,42,.45) !important;}
   /* ---- lineup player carousel ---- */
   html.dark-mode .lineup-player-carousel{background:rgba(15,23,42,.62);border-color:rgba(255,255,255,.08);}
   html.dark-mode .pos-carousel-btn{color:#94a3b8;background:rgba(15,23,42,.72);border-color:rgba(255,255,255,.09);}
@@ -856,3 +870,82 @@
   }
   .auto-advance-score.is-final{animation:aaScoreFlash .32s ease 3 alternate;}
   @keyframes aaScoreFlash{from{color:#fff}to{color:#f5d272}}
+
+/* ============================================================
+   SUBSTITUTION PICKER — TACTIC-PLANNER STYLE LAYOUT
+   ============================================================ */
+/* Two-column: field left, carousel+controls right */
+.ls-planner-layout{display:grid;grid-template-columns:1.1fr .9fr;align-items:start;min-height:0;}
+.ls-field-col{min-width:0;}
+.ls-carousel-col{min-width:0;border-left:1px solid rgba(0,0,0,.06);}
+/* Formation badge on the live-sub field */
+.ls-formation-badge{position:absolute;top:8px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.62);color:#fff;font-size:11px;font-weight:800;padding:2px 9px;border-radius:8px;pointer-events:none;z-index:5;}
+html.dark-mode .ls-formation-badge{background:rgba(0,0,0,.78);}
+/* Field bubble states */
+.sub-out-player{background:linear-gradient(135deg,#b31942,#7f1d3b) !important;border-color:rgba(255,100,100,.35) !important;animation:subOutPulse 1s ease infinite alternate;}
+@keyframes subOutPulse{from{box-shadow:0 0 0 0 rgba(179,25,66,.0)}to{box-shadow:0 0 0 4px rgba(179,25,66,.45)}}
+.ls-field-sel-bubble{background:linear-gradient(135deg,#c8962f,#f5d272) !important;border-color:rgba(245,210,114,.5) !important;}
+.sub-drop-target[data-field-name]:not([data-field-pos="GK"]){cursor:pointer;}
+/* Player cards in carousel */
+.ls-player-card{display:flex;align-items:center;gap:8px;border-radius:14px;border:1.5px solid var(--pos-border,rgba(0,0,0,.08));padding:8px 10px;text-align:left;width:100%;background:rgba(255,255,255,.7);transition:background .12s,border-color .12s;}
+.ls-player-card:hover:not(.pointer-events-none){background:color-mix(in srgb,var(--pos-soft,#fff) 30%,#fff);border-color:var(--pos-border,rgba(0,0,0,.2));}
+.ls-player-sel{background:#fffbeb !important;border-color:#f5d272 !important;}
+.ls-player-used{opacity:.5;pointer-events:none !important;}
+html.dark-mode .ls-player-card{background:rgba(30,41,59,.55);border-color:rgba(255,255,255,.1);}
+html.dark-mode .ls-player-card:hover:not(.pointer-events-none){background:rgba(51,65,85,.8);}
+html.dark-mode .ls-player-sel{background:rgba(59,45,5,.6) !important;border-color:#c8962f !important;}
+html.dark-mode .ls-carousel-col{border-left-color:rgba(255,255,255,.06);}
+/* Position badge inside live-sub player card */
+.ls-pos-badge{flex-shrink:0;width:36px;height:36px;border-radius:10px;display:grid;place-items:center;font-size:10px;font-weight:900;background:var(--pos-soft,#f1f5f9);color:var(--pos-text,#64748b);border:1px solid var(--pos-border,rgba(148,163,184,.26));}
+/* Status labels */
+.ls-status-field{color:#64748b;}
+.ls-status-bench{color:#94a3b8;}
+.ls-status-out{color:#b91c1c;}
+.ls-status-in{color:#16a34a;}
+.ls-status-sel{color:#b45309;}
+/* dark-mode: botão confirmar desabilitado fica visível */
+html.dark-mode .btn-premium.opacity-40{background:rgba(51,65,85,.75) !important;opacity:1 !important;color:rgba(148,163,184,.55) !important;box-shadow:none !important;}
+
+/* ============================================================
+   MOBILE RESPONSIVENESS
+   ============================================================ */
+/* Base mobile tweaks (< 640px) */
+@media(max-width:639px){
+  /* nav / header */
+  nav.app-nav{padding:0 12px;}
+  /* match simulator */
+  #matchSimulatorBox{padding:8px 4px;}
+  .sim-header{flex-wrap:wrap;gap:6px;padding:8px 10px;}
+  .sim-score-row{font-size:34px !important;}
+  .sim-action-bar{flex-wrap:wrap;gap:6px;}
+  /* sub picker — stack on mobile */
+  .ls-planner-layout{grid-template-columns:1fr;}
+  .ls-carousel-col{border-left:none;border-top:1px solid rgba(0,0,0,.06);}
+  html.dark-mode .ls-carousel-col{border-top-color:rgba(255,255,255,.06);}
+  /* tactic planner */
+  .lineup-field-wrap{height:220px !important;}
+  .lineup-player-carousel{gap:6px;}
+  /* journey card */
+  .journey-hero-card{border-radius:16px;}
+  .journey-clock-panel{padding:8px 14px;}
+  /* calendar day cards */
+  .match-card{padding:8px 10px;}
+  /* general spacing */
+  .guided-card{border-radius:16px;padding:12px !important;}
+  /* news */
+  .journey-news-item{padding:10px 12px;}
+  /* buttons */
+  .btn-premium{padding:10px 16px;font-size:14px;}
+  /* score pill sizing in match */
+  .pk-kick-row{gap:6px;}
+}
+
+/* Tablet: 640–1023px */
+@media(min-width:640px) and (max-width:1023px){
+  .ls-planner-layout{grid-template-columns:1.1fr .9fr;}
+}
+
+/* Prevent horizontal scroll */
+body{overflow-x:hidden;}
+*, *::before, *::after{box-sizing:border-box;min-width:0;}
+img{max-width:100%;}

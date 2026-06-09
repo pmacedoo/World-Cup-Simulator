@@ -3,6 +3,22 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+<meta http-equiv="Pragma" content="no-cache" />
+<!-- Cache-bust: compara version.json com localStorage; recarrega se mudou -->
+<script>
+(function(){
+  fetch('./version.json?t='+Date.now(), {cache:'no-store'})
+    .then(function(r){return r.json();})
+    .then(function(d){
+      var k='_wcs_v', v=d&&d.v;
+      if(v && localStorage.getItem(k)!==String(v)){
+        localStorage.setItem(k, String(v));
+        location.reload(true);
+      }
+    }).catch(function(){});
+})();
+</script>
 <title>Simulador Copa do Mundo FIFA 2026 — Reportagem Interativa</title>
 <meta name="description" content="Três simulações realistas e detalhadas da Copa do Mundo FIFA 2026 (EUA, México e Canadá): grupos, jogos, mata-mata, artilheiros e narrativa." />
 

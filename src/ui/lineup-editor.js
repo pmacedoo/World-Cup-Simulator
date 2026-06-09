@@ -42,6 +42,8 @@ function openTacticPlanner(match, journeyIndex=0){
     formation: base.formation,
     starters: base.starters.slice(),
     captain: base.captain,
+    penaltyTaker: base.penaltyTaker || "",
+    freeKickTaker: base.freeKickTaker || "",
     mentality: base.mentality || "balanced",
     subs: [],
     fieldPositions: base.positions || {},
@@ -68,6 +70,8 @@ function emptyTactic(team){
     formation: TEAMS[team]?.shape || "4-3-3",
     starters: [],
     captain: "",
+    penaltyTaker: "",
+    freeKickTaker: "",
     mentality: "balanced",
     liveScript: [],
     positions: {},
@@ -192,7 +196,7 @@ function replaceStarterInSlot(slotIndex, name){
     setFieldSlot(name, slot);
   }
   st.error=plPos(name)!==slot.pos ? `${name} improvisado em ${slot.pos}: desempenho reduzido.` : "";
-  if(!st.starters.includes(st.captain)) st.captain = WC_LINEUPS.pickCaptain(st.team, st.starters) || st.starters[0];
+  sanitizeRoles();
   sanitizeSubs();
   renderPlanner();
   return;
@@ -209,12 +213,20 @@ function plTactic(){
     .filter(s=>s.out && s.in && startSet.has(s.out) && !startSet.has(s.in))
     .map(s=>({ minute:Math.max(1,Math.min(120, s.minute|0)), type:"sub", out:s.out, in:s.in }))
     .sort((a,b)=>a.minute-b.minute);
-  return { formation:st.formation, starters:st.starters.slice(), captain:st.captain, mentality:st.mentality, positions, liveScript };
+  const penaltyTaker = st.starters.includes(st.penaltyTaker) ? st.penaltyTaker : "";
+  const freeKickTaker = st.starters.includes(st.freeKickTaker) ? st.freeKickTaker : "";
+  return { formation:st.formation, starters:st.starters.slice(), captain:st.captain, penaltyTaker, freeKickTaker, mentality:st.mentality, positions, liveScript };
 }
 function sanitizeSubs(){
   const startSet = new Set(plannerState.starters);
   plannerState.subs = plannerState.subs.filter(s=>
     (!s.out || startSet.has(s.out)) && (!s.in || !startSet.has(s.in)));
+}
+function sanitizeRoles(){
+  const st = plannerState;
+  if(!st.starters.includes(st.captain)) st.captain = WC_LINEUPS.pickCaptain(st.team, st.starters) || st.starters[0] || "";
+  if(st.penaltyTaker && !st.starters.includes(st.penaltyTaker)) st.penaltyTaker = "";
+  if(st.freeKickTaker && !st.starters.includes(st.freeKickTaker)) st.freeKickTaker = "";
 }
 
 /* ---------- mutações ---------- */
@@ -225,7 +237,8 @@ function setFormation(f){
   st.formation = f;
   st.starters = kept;
   orderStarters();
-  if(!st.starters.includes(st.captain)) st.captain = st.starters.length ? WC_LINEUPS.pickCaptain(st.team, st.starters) : "";
+  sanitizeRoles();
+  if(!st.starters.length) st.captain = "";
   st.fieldPositions = {};
   st.error = "";
   sanitizeSubs();
@@ -237,7 +250,7 @@ function toggleStarter(name){
   if(existingIdx>=0){
     st.starters.splice(existingIdx,1);
     delete st.fieldPositions[name];
-    if(!st.starters.includes(st.captain)) st.captain = WC_LINEUPS.pickCaptain(st.team, st.starters) || st.starters[0] || "";
+    sanitizeRoles();
     st.error="";
     sanitizeSubs();
     renderPlanner();
@@ -252,7 +265,7 @@ function toggleStarter(name){
   const slot=assigned.find(s=>!s.name && s.pos===plPos(name)) || assigned.find(s=>!s.name);
   st.starters.push(name);
   if(slot) setFieldSlot(name, slot);
-  if(!st.starters.includes(st.captain)) st.captain = WC_LINEUPS.pickCaptain(st.team, st.starters) || st.starters[0];
+  sanitizeRoles();
   st.error=slot && plPos(name)!==slot.pos ? `${name} improvisado em ${slot.pos}: desempenho reduzido.` : "";
   sanitizeSubs();
   renderPlanner();
@@ -270,7 +283,8 @@ function resetAuto(){
   const st = plannerState;
   const auto = WC_LINEUPS.autoTactic(st.team);
   st.formation = auto.formation; st.starters = auto.starters.slice();
-  st.captain = auto.captain; st.mentality = "balanced"; st.subs = []; st.fieldPositions = {}; st.error = "";
+  st.captain = auto.captain; st.penaltyTaker = ""; st.freeKickTaker = "";
+  st.mentality = "balanced"; st.subs = []; st.fieldPositions = {}; st.error = "";
   orderStarters();
   renderPlanner();
 }
@@ -452,6 +466,27 @@ function renderPlanner(){
         </div>
 
         <div class="guided-card rounded-3xl p-4">
+          <div class="text-[11px] uppercase tracking-widest font-extrabold text-slate-400 mb-3">Batedores</div>
+          <div class="space-y-2.5">
+            <div class="flex items-center gap-3">
+              <span class="text-xs font-extrabold text-slate-500 w-20 shrink-0 flex items-center gap-1">${ic('circle-dot','w-3.5 h-3.5 text-usared')} Pênalti</span>
+              <select id="penTakerSelect" class="flex-1 rounded-2xl border border-slate-200 px-3 py-2 font-bold text-sm">
+                <option value="">— automático —</option>
+                ${st.starters.filter(n=>plPos(n)!=="GK").map(n=>`<option value="${n}" ${n===st.penaltyTaker?'selected':''}>${n}</option>`).join("")}
+              </select>
+            </div>
+            <div class="flex items-center gap-3">
+              <span class="text-xs font-extrabold text-slate-500 w-20 shrink-0 flex items-center gap-1">${ic('flame','w-3.5 h-3.5 text-gold-500')} Falta</span>
+              <select id="fkTakerSelect" class="flex-1 rounded-2xl border border-slate-200 px-3 py-2 font-bold text-sm">
+                <option value="">— automático —</option>
+                ${st.starters.filter(n=>plPos(n)!=="GK").map(n=>`<option value="${n}" ${n===st.freeKickTaker?'selected':''}>${n}</option>`).join("")}
+              </select>
+            </div>
+          </div>
+          <p class="mt-2.5 text-[10px] text-slate-400 font-semibold leading-snug">Escolha quem cobra pênaltis e faltas na partida. Afeta a narrativa e os cobranças na disputa.</p>
+        </div>
+
+        <div class="guided-card rounded-3xl p-4">
           <div class="text-[11px] uppercase tracking-widest font-extrabold text-slate-400 mb-2">Força vs escalação padrão</div>
           <div class="flex gap-2">
             ${deltaPill("Ataque", rating.attackDelta)}
@@ -540,6 +575,8 @@ function wirePlanner(){
     };
   });
   const cap = $("#captainSelect"); if(cap) cap.onchange=()=>setCaptain(cap.value);
+  const penSel = $("#penTakerSelect"); if(penSel) penSel.onchange=()=>{ plannerState.penaltyTaker=penSel.value; };
+  const fkSel = $("#fkTakerSelect"); if(fkSel) fkSel.onchange=()=>{ plannerState.freeKickTaker=fkSel.value; };
   const auto = $("#autoLineup"); if(auto) auto.onclick=resetAuto;
   const add = $("#addSub"); if(add) add.onclick=addSub;
   document.querySelectorAll("#tacticPlannerBox .sub-del").forEach(b=> b.onclick=()=>removeSub(Number(b.dataset.i)));

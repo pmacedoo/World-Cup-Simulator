@@ -221,8 +221,17 @@ function simulateMatch(match, resumeFrom=0){
   // intervalo só pausa no jogo ATUAL da favorita (onde trocas são permitidas)
   const favTeam=getFavoriteTeam(), rec0=activeRecord();
   const editable = !!rec0 && (match.home===favTeam||match.away===favTeam) && (appState.currentSimulatedMatch?.journeyIndex)===rec0.revealed;
+  const simJourneyIdx = appState.currentSimulatedMatch?.journeyIndex;
+  const simTactic = (rec0?.tactics && simJourneyIdx!=null) ? (rec0.tactics[simJourneyIdx] || null) : null;
   let halftimeOffered = resumeFrom >= 45;
-  const goals = (match.goals||[]).map(g=>({...g, kind:"goal", norm:normalizeGoalMinute(g.minute, match)}));
+  const goals = (match.goals||[]).map(g=>{
+    let player = g.player;
+    if(simTactic && g.team===favTeam){
+      if(g.type==="de pênalti" && simTactic.penaltyTaker) player = simTactic.penaltyTaker;
+      else if(g.type==="cobrança de falta" && simTactic.freeKickTaker) player = simTactic.freeKickTaker;
+    }
+    return {...g, player, kind:"goal", norm:normalizeGoalMinute(g.minute, match)};
+  });
   const subWindows = Object.values((match.substitutions||[]).reduce((acc,s)=>{
     const key = [s.team, s.minute, s.window, s.extraTime ? "et" : "", s.concussion ? "conc" : ""].join("|");
     acc[key] = acc[key] || {...s, kind:"subWindow", norm:normalizeGoalMinute(s.minute, match), changes:[]};
@@ -234,7 +243,14 @@ function simulateMatch(match, resumeFrom=0){
   let shown=0, homeGoals=0, awayGoals=0;
   const scoreEl=$("#simScore"), clockEl=$("#simClock"), progressEl=$("#simProgress"), timeline=$("#simTimeline"), summary=$("#simSummary");
   const homeSide=$("#simHomeSide"), awaySide=$("#simAwaySide"), phaseEl=$("#simPhase");
-  timeline.innerHTML = `<div class="goal-event rounded-2xl bg-slate-100/80 px-4 py-3 text-sm font-semibold text-slate-500">${resumeFrom>0?`Substituição confirmada aos ${resumeFrom}'. A partida segue daqui.`:"Apito inicial. A partida começa em ritmo acelerado."}</div>`;
+  const _subs = _lastConfirmedSubs; _lastConfirmedSubs = null;
+  const resumeMsg = resumeFrom>0
+    ? (_subs&&_subs.length
+        ? `<div class="font-bold mb-1.5">Substituição${_subs.length>1?"ões":""} confirmada${_subs.length>1?"s":""} aos ${resumeFrom}′</div>`
+          + _subs.map(s=>`<div class="flex items-center gap-1.5 mt-1"><span class="text-usared font-extrabold">↑</span> <span>${s.out}</span> <span class="text-slate-400 mx-0.5">→</span> <span class="text-mxgreen font-extrabold">↓</span> <span>${s.in}</span></div>`).join("")
+        : `Substituição confirmada aos ${resumeFrom}'. A partida segue daqui.`)
+    : "Apito inicial. A partida começa em ritmo acelerado.";
+  timeline.innerHTML = `<div class="goal-event rounded-2xl bg-slate-100/80 px-4 py-3 text-sm font-semibold text-slate-500">${resumeMsg}</div>`;
   summary.textContent = "Acompanhe os eventos surgindo no minuto correto da simulação.";
   function addEvent(html){
     timeline.insertAdjacentHTML("afterbegin",`<div class="goal-event rounded-2xl bg-white/80 border border-white/80 px-4 py-3 shadow-glass">${html}</div>`);
@@ -389,13 +405,131 @@ function stopShootout(){
   (appState.penaltyTimers||[]).forEach(t=>clearTimeout(t));
   appState.penaltyTimers=[];
 }
+// ---- mini-campo interativo para o painel de substituição ----
+let _liveSubBenchSel = null;   // bench player seleccionado por clique
+
+function buildSubMiniField(){
+  if(!liveSubCtx) return "";
+  const {fav, journeyIndex, baseField, benchPool, posOf:ctxPosOf} = liveSubCtx;
+  const record = activeRecord(); if(!record) return "";
+  const tactic = (record.tactics && record.tactics[journeyIndex]) || WC_LINEUPS.autoTactic(fav);
+  const formation = tactic.formation || "4-3-3";
+  const nums = String(formation).match(/\d+/g)?.map(Number) || [4,3,3];
+  const sq = TEAMS[fav]?.sq; if(!sq) return "";
+  const posOf = n => sq.find(p=>p[0]===n)?.[1] || ctxPosOf(n) || "MF";
+  const distY = c => ({1:[50],2:[35,65],3:[25,50,75],4:[18,39,61,82],5:[14,32,50,68,86]})[c] || [18,39,61,82];
+  const lines = nums.length >= 4
+    ? [{pos:"GK",x:11,count:1},{pos:"DF",x:29,count:nums[0]},{pos:"MF",x:43,count:nums[1]},{pos:"MF",x:57,count:nums[2]},{pos:"FW",x:71,count:nums[3]}]
+    : [{pos:"GK",x:11,count:1},{pos:"DF",x:30,count:nums[0]||4},{pos:"MF",x:50,count:nums[1]||3},{pos:"FW",x:69,count:nums[2]||3}];
+  const slots = lines.flatMap(line => distY(line.count).map((y,i) => ({pos:line.pos, x:line.x, y, name:""})));
+  const fp = tactic.positions || {};
+  const placed = new Set();
+  const fieldArr = [...baseField];
+  fieldArr.forEach(name=>{
+    const saved=fp[name]; if(!saved) return;
+    const sl=slots.find(s=>!s.name && s.pos===(saved.pos||posOf(name)));
+    if(sl){ sl.name=name; placed.add(name); }
+  });
+  fieldArr.forEach(name=>{
+    if(placed.has(name)) return;
+    const sl=slots.find(s=>!s.name && s.pos===posOf(name));
+    if(sl){ sl.name=name; placed.add(name); }
+  });
+  fieldArr.forEach(name=>{
+    if(placed.has(name)) return;
+    const sl=slots.find(s=>!s.name);
+    if(sl){ sl.name=name; placed.add(name); }
+  });
+  const outSet = new Set((liveSubDraft||[]).filter(r=>r.out).map(r=>r.out));
+  const hasSel = !!_liveSubBenchSel;
+  const playerDivs = slots.filter(s=>s.name).map(slot=>{
+    const isOut = outSet.has(slot.name);
+    const canDrop = slot.pos !== "GK";
+    const parts = slot.name.split(" ");
+    const surname = parts.slice(1).join(" ") || parts[0];
+    const size = surname.length>12?"tiny":surname.length>9?"small":"";
+    const toneClass = isOut ? "sub-out-player" : "pos-tone-"+slot.pos.toLowerCase();
+    const dropAttrs = canDrop ? `data-field-name="${slot.name}" data-field-pos="${slot.pos}"` : "";
+    const dropClass = canDrop ? "sub-drop-target" : "";
+    const hoverClass = canDrop && hasSel ? "bench-click-hover" : "";
+    return `<div class="lineup-drop-slot filled ${dropClass} ${hoverClass}" ${dropAttrs} style="left:${slot.x}%;top:${slot.y}%">
+      <div class="lineup-field-player ${toneClass}">
+        <span class="lineup-pos">${slot.pos}</span>
+        <span class="lineup-name"><span class="lineup-surname ${size}">${surname}</span></span>
+      </div>
+    </div>`;
+  }).join("");
+  const inSet = new Set((liveSubDraft||[]).filter(r=>r.in).map(r=>r.in));
+  const benchDivs = (benchPool||[]).slice(0,10).map(name=>{
+    const isUsed = inSet.has(name);
+    const isSel = _liveSubBenchSel === name;
+    const pos = posOf(name);
+    const parts = name.split(" ");
+    const surname = parts.slice(1).join(" ") || parts[0];
+    const size = surname.length>10?"tiny":surname.length>7?"small":"";
+    return `<div class="sub-bench-slot ${isUsed?'is-used':''} ${isSel?'is-selected':''}" draggable="true" data-bench-name="${name}" title="${name}">
+      <div class="lineup-field-player pos-tone-${pos.toLowerCase()}">
+        <span class="lineup-pos">${pos}</span>
+        <span class="lineup-name"><span class="lineup-surname ${size}">${surname}</span></span>
+      </div>
+    </div>`;
+  }).join("");
+  return `<div class="lineup-field-wrap sub-field-mini">
+    <img class="lineup-field-img" src="public/assets/images/soccerfieldremaster.png" alt="">
+    <div class="lineup-field-overlay">${playerDivs}</div>
+    <div class="sub-field-badge">${formation}</div>
+  </div>
+  <div class="sub-bench-row">${benchDivs}</div>`;
+}
+
+function handleSubDrop(fieldPlayer, benchPlayer){
+  if(!liveSubCtx || !liveSubDraft || !fieldPlayer || !benchPlayer) return;
+  const {benchPool, posOf} = liveSubCtx;
+  if(!benchPool.includes(benchPlayer)) return;
+  if(posOf(fieldPlayer)==="GK") return;
+  // don't allow if bench player already used in a different row
+  if(liveSubDraft.some(r=>r.in===benchPlayer && r.out!==fieldPlayer)) return;
+  const existing = liveSubDraft.find(r=>r.out===fieldPlayer);
+  if(existing){ existing.in=benchPlayer; renderLiveSubPicker(); return; }
+  const empty = liveSubDraft.find(r=>!r.out && !r.in);
+  if(empty){ empty.out=fieldPlayer; empty.in=benchPlayer; renderLiveSubPicker(); return; }
+  if(liveSubDraft.length < liveSubMaxRows()){ liveSubDraft.push({out:fieldPlayer, in:benchPlayer}); renderLiveSubPicker(); }
+}
+
 function startShootout(match){
   stopShootout();
-  const sh=match.penalties; if(!sh) return;
+  let sh=match.penalties; if(!sh) return;
+  // Usa os jogadores de linha do XI escolhido pelo usuário como cobradores
+  const fav=getFavoriteTeam(), record=activeRecord(), item=appState.currentSimulatedMatch;
+  if(fav && record && item && (match.home===fav || match.away===fav)){
+    const tactic=(record.tactics && record.tactics[item.journeyIndex]) || null;
+    const lineup=(tactic?.starters||[]);
+    if(lineup.length){
+      const sq=TEAMS[fav]?.sq||[];
+      const posOf=n=>sq.find(p=>p[0]===n)?.[1]||"MF";
+      const ovrOf=n=>sq.find(p=>p[0]===n)?.[2]||70;
+      const posOrd={FW:0,MF:1,DF:2,GK:9};
+      const designatedPen = tactic?.penaltyTaker || "";
+      const penOrder=lineup.filter(n=>posOf(n)!=="GK")
+        .sort((a,b)=>{
+          if(a===designatedPen) return -1;
+          if(b===designatedPen) return 1;
+          return (posOrd[posOf(a)]||0)-(posOrd[posOf(b)]||0)||ovrOf(b)-ovrOf(a);
+        });
+      if(penOrder.length){
+        let ki=0;
+        sh={...sh, kicks:sh.kicks.map(k=>{
+          if(k.team!==fav) return k;
+          const player=penOrder[ki++ % penOrder.length]||k.player;
+          return {...k, player};
+        })};
+      }
+    }
+  }
   const mount=$("#pkMount"); if(!mount) return;
   const infoGrid=$("#simInfoGrid");
   if(infoGrid) infoGrid.classList.add("hidden");
-  const fav=getFavoriteTeam(), home=match.home, away=match.away;
+  const home=match.home, away=match.away;
   mount.innerHTML = `
     <div class="pk-wrap">
       <div class="text-[11px] uppercase tracking-widest font-extrabold text-slate-400 mb-3 flex items-center gap-2">${ic('target','w-4 h-4 text-usared')} Disputa de pênaltis</div>
@@ -526,6 +660,9 @@ const LIVE_SUB_PER_WINDOW = 3;            // até 3 trocas na MESMA parada
 const LIVE_SUB_INPLAY_WINDOWS = 3;       // no máx. 3 paradas com bola rolando (fora o intervalo)
 let liveSubDraft = null;                  // [{out,in}] em edição na janela atual
 let liveSubCtx = null;                    // contexto da janela aberta
+let _liveSubListIdx = 0;                  // índice do carrossel de posições
+let _liveSubFieldSel = null;              // jogador de campo selecionado para sair
+let _lastConfirmedSubs = null;            // [{out,in}] da última janela confirmada
 
 function onFieldNamesAt(tactic, minute){
   const field = new Set(tactic.starters||[]);
@@ -544,7 +681,8 @@ function subWindowInfo(liveScript){
 function clearLiveSubPicker(){
   const mount=$("#liveSubMount"); if(mount) mount.innerHTML="";
   appState.liveSubPaused=false;
-  liveSubDraft=null; liveSubCtx=null;
+  liveSubDraft=null; liveSubCtx=null; _liveSubBenchSel=null;
+  _liveSubListIdx=0; _liveSubFieldSel=null;
 }
 function openHalftimeBreak(){ openLiveSubPicker("halftime"); }
 function openLiveSubPicker(mode){
@@ -591,61 +729,240 @@ function liveSubMaxRows(){
   const { totalMax, info, benchPool } = liveSubCtx;
   return Math.max(1, Math.min(LIVE_SUB_PER_WINDOW, totalMax-info.total, benchPool.length));
 }
+// ---- campo e carrossel para o painel de substituição (estilo planejador tático) ----
+function _lsNameCircle(name){
+  const parts=String(name||"").trim().split(/\s+/).filter(Boolean);
+  const sz=s=>s.length>12?"tiny":s.length>9?"small":"";
+  if(parts.length<=1) return `<span class="lineup-main ${sz(name)}">${name||""}</span>`;
+  const first=`${parts[0][0]}.`;
+  const surname=parts.slice(1).join(" ");
+  return `<span class="lineup-initial">${first}</span><span class="lineup-surname ${sz(surname)}">${surname}</span>`;
+}
+function buildLiveSubField(){
+  if(!liveSubCtx) return "";
+  const {fav, journeyIndex, baseField, posOf:ctxPosOf} = liveSubCtx;
+  const record=activeRecord(); if(!record) return "";
+  const tactic=(record.tactics&&record.tactics[journeyIndex])||WC_LINEUPS.autoTactic(fav);
+  const formation=tactic.formation||"4-3-3";
+  const nums=String(formation).match(/\d+/g)?.map(Number)||[4,3,3];
+  const sq=TEAMS[fav]?.sq; if(!sq) return "";
+  const posOf=n=>sq.find(p=>p[0]===n)?.[1]||ctxPosOf(n)||"MF";
+  const distY=c=>({1:[50],2:[35,65],3:[25,50,75],4:[18,39,61,82],5:[14,32,50,68,86]})[c]||[18,39,61,82];
+  const lines=nums.length>=4
+    ?[{pos:"GK",x:11,count:1},{pos:"DF",x:29,count:nums[0]},{pos:"MF",x:43,count:nums[1]},{pos:"MF",x:57,count:nums[2]},{pos:"FW",x:71,count:nums[3]}]
+    :[{pos:"GK",x:11,count:1},{pos:"DF",x:30,count:nums[0]||4},{pos:"MF",x:50,count:nums[1]||3},{pos:"FW",x:69,count:nums[2]||3}];
+  const slots=lines.flatMap(line=>distY(line.count).map((y)=>({pos:line.pos,x:line.x,y,name:""})));
+  const fp=tactic.positions||{};
+  const placed=new Set();
+  const fieldArr=[...baseField];
+  fieldArr.forEach(name=>{
+    const saved=fp[name]; if(!saved) return;
+    const sl=slots.find(s=>!s.name&&s.pos===(saved.pos||posOf(name)));
+    if(sl){sl.name=name;placed.add(name);}
+  });
+  fieldArr.forEach(name=>{
+    if(placed.has(name)) return;
+    const sl=slots.find(s=>!s.name&&s.pos===posOf(name));
+    if(sl){sl.name=name;placed.add(name);}
+  });
+  fieldArr.forEach(name=>{
+    if(placed.has(name)) return;
+    const sl=slots.find(s=>!s.name);
+    if(sl){sl.name=name;placed.add(name);}
+  });
+  const outSet=new Set((liveSubDraft||[]).filter(r=>r.out).map(r=>r.out));
+  const slotDivs=slots.filter(s=>s.name).map(slot=>{
+    const isOut=outSet.has(slot.name);
+    const isSel=_liveSubFieldSel===slot.name;
+    const canInteract=slot.pos!=="GK";
+    const toneClass=isOut?"sub-out-player":isSel?"ls-field-sel-bubble":"pos-tone-"+slot.pos.toLowerCase();
+    const dataAttrs=canInteract?`data-field-name="${slot.name}" data-field-pos="${slot.pos}"`:"";
+    const cls=`lineup-drop-slot filled${canInteract?" sub-drop-target":""}`;
+    return `<div class="${cls}" ${dataAttrs} style="left:${slot.x}%;top:${slot.y}%;${canInteract?"cursor:pointer":""}">
+      <div class="lineup-field-player ${toneClass}">
+        <span class="lineup-pos">${slot.pos}</span>
+        <span class="lineup-name">${_lsNameCircle(slot.name)}</span>
+      </div>
+    </div>`;
+  }).join("");
+  return `<div class="lineup-field-wrap">
+    <img class="lineup-field-img" src="public/assets/images/soccerfieldremaster.png" alt="">
+    <div class="lineup-field-overlay">${slotDivs}</div>
+    <div class="ls-formation-badge">${formation}</div>
+  </div>`;
+}
+function buildLiveSubCarousel(){
+  if(!liveSubCtx) return "";
+  const {fav, baseField, benchPool, posOf:ctxPosOf} = liveSubCtx;
+  const sq=TEAMS[fav]?.sq||[];
+  const posOf=n=>sq.find(p=>p[0]===n)?.[1]||ctxPosOf(n)||"MF";
+  const inSet=new Set((liveSubDraft||[]).filter(r=>r.in).map(r=>r.in));
+  const outSet=new Set((liveSubDraft||[]).filter(r=>r.out).map(r=>r.out));
+  const i=Math.max(0,Math.min(_liveSubListIdx,POS_GROUPS.length-1));
+  const group=POS_GROUPS[i];
+  const posPlayers=sq.filter(p=>p[1]===group.pos).map(p=>p[0]);
+  const cards=posPlayers.map(name=>{
+    const isOnField=baseField.has(name);
+    const isBench=benchPool.includes(name);
+    const isGK=group.pos==="GK";
+    const isOut=outSet.has(name);
+    const isIn=inSet.has(name);
+    const isFieldSel=_liveSubFieldSel===name;
+    const isBenchSel=_liveSubBenchSel===name;
+    const canInteract=!isGK&&!isOut&&!isIn&&(isBench||isOnField);
+    let statusLabel, statusCls;
+    if(isOut){statusLabel="Saindo";statusCls="ls-status-out";}
+    else if(isIn){statusLabel="Entrando";statusCls="ls-status-in";}
+    else if(isFieldSel){statusLabel="Selecionado · sai";statusCls="ls-status-sel";}
+    else if(isBenchSel){statusLabel="Selecionado · entra";statusCls="ls-status-sel";}
+    else if(isOnField){statusLabel="Titular";statusCls="ls-status-field";}
+    else if(isBench){statusLabel="Reserva";statusCls="ls-status-bench";}
+    else{statusLabel="Fora";statusCls="ls-status-bench";}
+    let extraCls="";
+    if(isFieldSel||isBenchSel) extraCls="ls-player-sel";
+    else if(isOut||isIn) extraCls="ls-player-used";
+    else if(!canInteract) extraCls="opacity-50 pointer-events-none";
+    const icon=isOut?ic('arrow-up-from-line','w-3.5 h-3.5 flex-none')
+      :isIn?ic('arrow-down-to-line','w-3.5 h-3.5 flex-none')
+      :isFieldSel||isBenchSel?ic('check','w-3.5 h-3.5 flex-none'):"";
+    return `<button type="button" class="ls-player-card pos-tone-${group.pos.toLowerCase()} ${extraCls}"
+      data-ls-player="${name}" data-ls-field="${isOnField?'1':''}" data-ls-bench="${isBench?'1':''}">
+      <span class="ls-pos-badge">${group.pos}</span>
+      <span class="min-w-0 flex-1">
+        <span class="block font-bold text-sm truncate leading-tight">${name}</span>
+        <span class="block text-[10px] uppercase tracking-wider font-extrabold ${statusCls}">${statusLabel}</span>
+      </span>
+      ${icon}
+    </button>`;
+  }).join("");
+  return `<div class="lineup-player-carousel">
+    <div class="flex items-center justify-between gap-3 mb-3">
+      <button class="pos-carousel-btn" data-ls-dir="-1">${ic('chevron-left','w-4 h-4')}</button>
+      <div class="text-center min-w-0">
+        <div class="text-[10px] uppercase tracking-widest font-extrabold text-slate-400 mb-0.5">Lista de jogadores</div>
+        <div class="font-display font-extrabold text-lg leading-tight">${group.label}</div>
+      </div>
+      <button class="pos-carousel-btn" data-ls-dir="1">${ic('chevron-right','w-4 h-4')}</button>
+    </div>
+    <div class="flex justify-center gap-1.5 mb-3">
+      ${POS_GROUPS.map((g,idx)=>`<button class="pos-carousel-dot ${idx===i?'active':''}" data-ls-dot="${idx}" title="${g.label}"></button>`).join("")}
+    </div>
+    <div class="space-y-2">${cards||`<div class="text-sm text-slate-400 py-2 text-center font-semibold">Nenhum jogador</div>`}</div>
+  </div>`;
+}
 function renderLiveSubPicker(){
   if(!liveSubCtx) return;
   const mount=$("#liveSubMount"); if(!mount) return;
-  const { mode, subMinute, totalMax, info, posOf, blockedReason } = liveSubCtx;
-  const isHalf = mode==="halftime";
-  const maxRows = liveSubMaxRows();
-  const ready = liveSubDraft.filter(r=>r.out && r.in).length;
-  const opt = (sel, list, ph)=> `<option value="">${ph}</option>` + list.map(n=>`<option value="${n}" ${n===sel?'selected':''}>${n} · ${posOf(n)}</option>`).join("");
-  const counter = `${info.total}/${totalMax} trocas · ${info.inPlayWindows}/${LIVE_SUB_INPLAY_WINDOWS} paradas`;
-  let body;
+  const {mode, subMinute, totalMax, info, blockedReason} = liveSubCtx;
+  const isHalf=mode==="halftime";
+  const maxRows=liveSubMaxRows();
+  const readyRows=liveSubDraft.filter(r=>r.out&&r.in);
+  const counter=`${info.total}/${totalMax} trocas · ${info.inPlayWindows}/${LIVE_SUB_INPLAY_WINDOWS} paradas`;
+  const hint=_liveSubBenchSel
+    ? `${ic('arrow-down-to-line','w-3.5 h-3.5 text-usablue inline-block mr-1')}<b>${_liveSubBenchSel}</b> — agora clique em quem sai`
+    : _liveSubFieldSel
+    ? `${ic('arrow-up-from-line','w-3.5 h-3.5 text-amber-500 inline-block mr-1')}<b>${_liveSubFieldSel}</b> sai — clique em quem entra`
+    : isHalf
+    ? "Selecione quem entra e quem sai no intervalo."
+    : "Clique num reserva para selecionar quem entra, depois clique em quem sai.";
+  const pendingHtml=readyRows.length?`<div class="space-y-1.5 mt-3">
+    ${readyRows.map((r,i)=>`<div class="flex items-center gap-1.5 rounded-xl bg-emerald-50 border border-emerald-200 px-3 py-2 text-sm font-bold">
+      <span class="flex-1 truncate text-slate-700">${r.out}</span>
+      <span class="text-emerald-500 shrink-0">${ic('arrow-right','w-3.5 h-3.5')}</span>
+      <span class="flex-1 truncate text-slate-700">${r.in}</span>
+      <button class="ls-del-row w-5 h-5 grid place-items-center text-slate-400 hover:text-usared rounded-full shrink-0" data-ri="${i}">${ic('x','w-3 h-3')}</button>
+    </div>`).join("")}
+  </div>`:"";
+  let rightPanel;
   if(blockedReason){
-    const msg = blockedReason==="total" ? "Você já usou todas as substituições."
-      : "Você já usou as 3 paradas permitidas (fora o intervalo).";
-    body = `<div class="text-sm font-semibold text-slate-500">${msg}</div>
-      <div class="mt-3 flex justify-end"><button id="liveSubGo" class="btn-premium text-white rounded-2xl px-5 py-2.5 font-bold">${isHalf?'Continuar 2º tempo':'Continuar jogo'}</button></div>`;
+    const msg=blockedReason==="total"?"Você já usou todas as substituições.":"Você já usou as 3 paradas permitidas (fora o intervalo).";
+    rightPanel=`<div class="p-4">
+      <div class="text-sm font-semibold text-slate-500 mb-3">${msg}</div>
+      <button id="liveSubGo" class="btn-premium text-white rounded-2xl px-5 py-2.5 font-bold w-full">${isHalf?'Continuar 2º tempo':'Continuar jogo'}</button>
+    </div>`;
   } else {
-    const rowsHtml = liveSubDraft.map((r,i)=>{
-      const { outs, ins } = liveSubRowOptions(i);
-      return `<div class="grid grid-cols-[1fr_auto_1fr_auto] items-center gap-2">
-          <select class="ls-out rounded-2xl border border-slate-200 px-3 py-2.5 text-sm font-bold" data-i="${i}">${opt(r.out, outs, "— sai —")}</select>
-          <span class="text-slate-300">${ic('arrow-right','w-4 h-4')}</span>
-          <select class="ls-in rounded-2xl border border-slate-200 px-3 py-2.5 text-sm font-bold" data-i="${i}">${opt(r.in, ins, "— entra —")}</select>
-          <button class="ls-del w-8 h-8 grid place-items-center rounded-full text-slate-300 hover:text-usared ${liveSubDraft.length>1?'':'invisible'}" data-i="${i}" title="Remover">${ic('x','w-4 h-4')}</button>
-        </div>`;
-    }).join("");
-    body = `<div class="text-[11px] text-slate-400 font-semibold mb-2">${isHalf?'Trocas no intervalo (não contam nas 3 paradas).':'Você pode fazer até '+maxRows+' troca(s) nesta parada.'}</div>
-       <div class="space-y-2">${rowsHtml}</div>
-       <div class="mt-2">${liveSubDraft.length<maxRows ? `<button id="liveSubAdd" class="glass rounded-xl px-3 py-1.5 text-xs font-extrabold text-slate-600 flex items-center gap-1">${ic('plus','w-3.5 h-3.5')} Outra troca</button>` : ''}</div>
-       <div class="mt-3 flex justify-between gap-2">
-         <button id="liveSubCancel" class="glass rounded-2xl px-4 py-2.5 font-bold text-slate-600">${isHalf?'Sem trocas':'Cancelar'}</button>
-         <button id="liveSubConfirm" class="btn-premium text-white rounded-2xl px-5 py-2.5 font-extrabold ${(isHalf||ready)?'':'opacity-40 pointer-events-none'}">${isHalf?'Continuar 2º tempo':('Confirmar '+(ready>1?ready+' trocas':'troca'))}</button>
-       </div>`;
+    rightPanel=`<div class="p-4 flex flex-col gap-3">
+      ${buildLiveSubCarousel()}
+      <div class="text-[11px] text-slate-400 font-semibold leading-snug px-1">${hint}</div>
+      ${pendingHtml}
+      <div class="flex gap-2 pt-1">
+        <button id="liveSubCancel" class="glass rounded-2xl px-4 py-2.5 font-bold text-slate-600 flex-none">${isHalf?'Sem trocas':'Cancelar'}</button>
+        <button id="liveSubConfirm" class="btn-premium text-white rounded-2xl px-5 py-2.5 font-extrabold flex-1 ${(isHalf||readyRows.length)?'':'opacity-40 pointer-events-none'}">${isHalf?'Continuar 2º tempo':readyRows.length>1?'Confirmar '+readyRows.length+' trocas':'Confirmar troca'}</button>
+      </div>
+    </div>`;
   }
-  mount.innerHTML = `
-    <div class="guided-card rounded-3xl p-4 border-2 ${isHalf?'border-gold-400/50':'border-usablue/30'}">
-      <div class="flex items-center justify-between mb-3 gap-2">
-        <div class="font-display font-extrabold text-lg flex items-center gap-2 min-w-0">${ic(isHalf?'coffee':'repeat-2',(isHalf?'w-5 h-5 text-gold-600':'w-5 h-5 text-usablue')+' flex-none')} <span class="truncate">${isHalf?'Intervalo · 1º tempo encerrado':'Substituições — '+subMinute+"'"}</span></div>
+  mount.innerHTML=`
+    <div class="guided-card rounded-3xl border-2 overflow-hidden ${isHalf?'border-gold-400/50':'border-usablue/30'}">
+      <div class="flex items-center justify-between px-4 pt-4 pb-2 gap-2">
+        <div class="font-display font-extrabold text-lg flex items-center gap-2 min-w-0">
+          ${ic(isHalf?'coffee':'repeat-2',(isHalf?'w-5 h-5 text-gold-600':'w-5 h-5 text-usablue')+' flex-none')}
+          <span class="truncate">${isHalf?'Intervalo · 1º tempo encerrado':'Substituições — '+subMinute+"'"}</span>
+        </div>
         <div class="flex items-center gap-2 flex-none">
           <div class="text-[11px] font-extrabold rounded-full px-2 py-0.5 ${info.total>=totalMax?'text-usared bg-usared/10':'text-slate-500 bg-slate-100'}">${counter}</div>
           <button id="liveSubClose" class="w-8 h-8 grid place-items-center rounded-full bg-slate-100 text-slate-500 hover:bg-usared/10 hover:text-usared font-bold" title="${isHalf?'Continuar sem trocas':'Cancelar e continuar o jogo'}">✕</button>
         </div>
       </div>
-      ${body}
+      <div class="ls-planner-layout">
+        <div class="ls-field-col p-4">${buildLiveSubField()}</div>
+        <div class="ls-carousel-col">${rightPanel}</div>
+      </div>
     </div>`;
   paintIcons();
   if($("#liveSubClose")) $("#liveSubClose").onclick=cancelLiveSub;
   if($("#liveSubGo")) $("#liveSubGo").onclick=cancelLiveSub;
   if($("#liveSubCancel")) $("#liveSubCancel").onclick=cancelLiveSub;
-  if($("#liveSubAdd")) $("#liveSubAdd").onclick=()=>{ liveSubDraft.push({out:"", in:""}); renderLiveSubPicker(); };
-  document.querySelectorAll("#liveSubMount .ls-out").forEach(s=> s.onchange=()=>{ liveSubDraft[Number(s.dataset.i)].out=s.value; renderLiveSubPicker(); });
-  document.querySelectorAll("#liveSubMount .ls-in").forEach(s=> s.onchange=()=>{ liveSubDraft[Number(s.dataset.i)].in=s.value; renderLiveSubPicker(); });
-  document.querySelectorAll("#liveSubMount .ls-del").forEach(b=> b.onclick=()=>{ liveSubDraft.splice(Number(b.dataset.i),1); renderLiveSubPicker(); });
-  // no intervalo o botão principal "Continuar" aplica as trocas (se houver) ou só segue
-  if($("#liveSubConfirm")) $("#liveSubConfirm").onclick=()=> (liveSubDraft.some(r=>r.out&&r.in) ? confirmLiveSubs() : cancelLiveSub());
-  mount.scrollIntoView({behavior:"smooth", block:"nearest"});
+  if($("#liveSubConfirm")) $("#liveSubConfirm").onclick=()=>(liveSubDraft.some(r=>r.out&&r.in)?confirmLiveSubs():cancelLiveSub());
+  document.querySelectorAll("#liveSubMount .ls-del-row").forEach(b=>{
+    b.onclick=()=>{
+      liveSubDraft.splice(Number(b.dataset.ri),1);
+      if(!liveSubDraft.length) liveSubDraft.push({out:"",in:""});
+      renderLiveSubPicker();
+    };
+  });
+  document.querySelectorAll("#liveSubMount [data-ls-dir]").forEach(btn=>{
+    btn.onclick=()=>{ _liveSubListIdx=(POS_GROUPS.length+_liveSubListIdx+Number(btn.dataset.lsDir))%POS_GROUPS.length; renderLiveSubPicker(); };
+  });
+  document.querySelectorAll("#liveSubMount [data-ls-dot]").forEach(btn=>{
+    btn.onclick=()=>{ _liveSubListIdx=Number(btn.dataset.lsDot); renderLiveSubPicker(); };
+  });
+  document.querySelectorAll("#liveSubMount [data-ls-player]").forEach(card=>{
+    card.onclick=()=>{
+      const name=card.dataset.lsPlayer;
+      const isBench=card.dataset.lsBench==="1";
+      const isField=card.dataset.lsField==="1";
+      if(isBench){
+        if(_liveSubFieldSel){
+          handleSubDrop(_liveSubFieldSel,name);
+          _liveSubFieldSel=null; _liveSubBenchSel=null;
+        } else {
+          _liveSubBenchSel=(_liveSubBenchSel===name)?null:name;
+          renderLiveSubPicker();
+        }
+      } else if(isField){
+        if(_liveSubBenchSel){
+          handleSubDrop(name,_liveSubBenchSel);
+          _liveSubFieldSel=null; _liveSubBenchSel=null;
+        } else {
+          _liveSubFieldSel=(_liveSubFieldSel===name)?null:name;
+          renderLiveSubPicker();
+        }
+      }
+    };
+  });
+  document.querySelectorAll("#liveSubMount .sub-drop-target[data-field-name]").forEach(slot=>{
+    slot.onclick=()=>{
+      const fieldPlayer=slot.dataset.fieldName;
+      if(_liveSubBenchSel){
+        handleSubDrop(fieldPlayer,_liveSubBenchSel);
+        _liveSubFieldSel=null; _liveSubBenchSel=null;
+      } else {
+        _liveSubFieldSel=(_liveSubFieldSel===fieldPlayer)?null:fieldPlayer;
+        renderLiveSubPicker();
+      }
+    };
+  });
+  mount.scrollIntoView({behavior:"smooth",block:"nearest"});
 }
 function cancelLiveSub(){
   const item=appState.currentSimulatedMatch;
@@ -669,6 +986,7 @@ function confirmLiveSubs(){
   const tactic = { ...cur, starters:cur.starters.slice(), liveScript:[...(cur.liveScript||[]), ...picks] };
   setMatchTactic(record, journeyIndex, tactic);            // grava + invalida cache (prefixo estável)
   const fresh = getTeamMatches(currentSim(), fav)[journeyIndex];
+  _lastConfirmedSubs = picks.map(p=>({out:p.out, in:p.in}));
   clearLiveSubPicker();
   if(fresh){ appState.currentSimulatedMatch={match:fresh, journeyIndex, minute:resumeMinute}; simulateMatch(fresh, Math.max(0, resumeMinute)); }
 }
