@@ -221,7 +221,10 @@ function simulateMatch(match, resumeFrom=0){
       progressEl.style.width="100%";
       // revela este jogo na jornada (idempotente; só avança o progresso)
       const item=appState.currentSimulatedMatch;
-      if(item && item.match===match) markMatchRevealed(activeRecord(), item.journeyIndex);
+      if(item && item.match===match){
+        if(typeof markCalendarMatchWatched==="function") markCalendarMatchWatched(activeRecord(), match);
+        if((item.journeyIndex|0) >= 0) markMatchRevealed(activeRecord(), item.journeyIndex);
+      }
       if(!goals.length) addEvent(`<div class="font-extrabold text-slate-700">Fim do tempo${match.aet?' (após prorrogação)':''}.</div><div class="text-sm text-slate-500">${match.penalties?'Empate persiste — a decisão vai para os pênaltis.':'Defesas dominaram e ninguém abriu o placar.'}</div>`);
       if(match.penalties){
         clockEl.textContent = match.aet?"120'":"90'";

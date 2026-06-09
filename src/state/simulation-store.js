@@ -45,9 +45,13 @@ function loadSims(){
       const revealed=Math.max(0,r.revealed|0);
       const dayPhase = r.dayPhase==="night" || (!r.dayPhase && revealed>0) ? "night" : "morning";
       const tactics = (r.tactics && typeof r.tactics==="object") ? r.tactics : {};
+      const watchIndex=Math.max(0,r.watchIndex|0);
+      const calendarDayIndex=Math.max(0,r.calendarDayIndex|0);
+      const journeyMinute=Number.isFinite(r.journeyMinute) ? Math.max(0, Math.min(1439, r.journeyMinute|0)) : 300;
+      const watchedMatchNos=Array.isArray(r.watchedMatchNos) ? r.watchedMatchNos.map(Number).filter(Boolean) : [];
       return { id:r.id||uid(), favoriteTeam:r.favoriteTeam, type:r.type, seed:(r.seed>>>0)||1,
         createdAt:r.createdAt||Date.now(), revealed, tactics,
-        finished:!!r.finished, dashboardUnlocked:!!r.dashboardUnlocked, dayPhase };
+        watchIndex, calendarDayIndex, journeyMinute, watchedMatchNos, finished:!!r.finished, dashboardUnlocked:!!r.dashboardUnlocked, dayPhase };
     });
   const act=safeStorageGet(SIM_ACTIVE_KEY);
   appState.activeId = appState.sims.some(r=>r.id===act) ? act : (appState.sims[0]?.id || null);
@@ -70,7 +74,7 @@ function activeRecord(){ return appState.sims.find(r=>r.id===appState.activeId) 
 function currentSim(){ return simObjFor(activeRecord()); }
 function createSimulation(team, type){
   const rec={ id:uid(), favoriteTeam:team, type, seed:((Date.now()^(Math.random()*1e9))>>>0)||1,
-    createdAt:Date.now(), revealed:0, tactics:{}, finished:false, dashboardUnlocked:false, dayPhase:"morning" };
+    createdAt:Date.now(), revealed:0, watchIndex:0, calendarDayIndex:0, journeyMinute:300, watchedMatchNos:[], tactics:{}, finished:false, dashboardUnlocked:false, dayPhase:"morning" };
   appState.sims.push(rec); appState.activeId=rec.id; persistSims();
   return rec;
 }
@@ -96,8 +100,10 @@ function markMatchRevealed(record, journeyIndex){
   const sim=simObjFor(record);
   const total=getTeamMatches(sim, record.favoriteTeam).length;
   record.revealed = Math.min(total, Math.max(record.revealed, journeyIndex+1));
-  if(record.revealed>=total) record.finished=true;
-  record.dayPhase = "night";
+  if(record.revealed>=total){
+    record.finished=false;
+    record.watchIndex=record.watchIndex||0;
+  }
   persistSims();
 }
 function syncDashboardState(){
