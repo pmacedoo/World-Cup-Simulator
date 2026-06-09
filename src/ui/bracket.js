@@ -48,8 +48,8 @@ function bkTeamRow(m, team, goals, pens, slot, isWinner){
 }
 function bkCard(m, champ){
   const champWin = champ && (m.winner.team===champ);
-  const homeSeed = m.stage==="Fase de 32" ? slotLabel(m.A) : "";
-  const awaySeed = m.stage==="Fase de 32" ? slotLabel(m.B) : "";
+  const homeSeed = m.stage==="16-avos" || m.stage==="Fase de 32" ? slotLabel(m.A) : "";
+  const awaySeed = m.stage==="16-avos" || m.stage==="Fase de 32" ? slotLabel(m.B) : "";
   const protection = m.topSeedRule ? `<div class="br-meta" style="color:${m.topSeedRule.allowed?'#1f7a4d':'#b31942'}">${m.topSeedRule.allowed?'Top 4 FIFA ok':'Top 4 FIFA violado'}</div>` : "";
   const extra = m.pens ? "pên." : (m.aet ? "prorr." : "");
   const finalHead = m.stage==="Final" ? `<div class="br-final-title">${ic('trophy','w-3 h-3')} Final</div>` : "";
@@ -98,8 +98,8 @@ function bracketSlotRow(seed,label){
 //   'teams'  -> seleções conhecidas, placar oculto (confronto ainda não jogado)
 //   'locked' -> "A definir" (rodada futura: depende de resultados não revelados)
 function bracketMatchCard(m, champ, mode='full'){
-  const homeSeed = m.stage==="Fase de 32" ? slotLabel(m.A) : "";
-  const awaySeed = m.stage==="Fase de 32" ? slotLabel(m.B) : "";
+  const homeSeed = m.stage==="16-avos" || m.stage==="Fase de 32" ? slotLabel(m.A) : "";
+  const awaySeed = m.stage==="16-avos" || m.stage==="Fase de 32" ? slotLabel(m.B) : "";
   if(mode==='locked'){
     return `<div class="bracket-match bracket-locked">
       <div class="bracket-match-head"><span>${m.matchNo?`M${m.matchNo}`:''}</span><span>${ic('lock','w-3 h-3')}</span></div>
@@ -125,26 +125,39 @@ function bracketMatchCard(m, champ, mode='full'){
 // monta o chaveamento em colunas. modeFn(m) -> 'full' | 'teams' | 'locked'.
 function buildBracketHTML(sim, champ, modeFn=()=>'full'){
   const k=sim.knockout;
-  const rounds = [
-    ["Fase de 32", k.R32],
-    ["Oitavas",    k.R16],
-    ["Quartas",    k.QF],
-    ["Semifinais", k.SF],
-    ["Final",      [k.final]],
-  ];
-  const cols = rounds.map(([title,ms],ri)=>{
-    const isFinal = ri===rounds.length-1;
-    const champKnown = isFinal && champ && modeFn(k.final)==='full';
-    return `<div class="bracket-round ${isFinal?'r-final':''}">
-      <div class="bracket-round-title">${title}</div>
-      <div class="bracket-round-matches">${ms.map(m=>bracketMatchCard(m,champ,modeFn(m))).join("")}</div>
-      ${isFinal&&champKnown?`<div class="bracket-champ-banner">
-        <div class="text-[10px] uppercase tracking-widest font-extrabold text-gold-600 flex items-center justify-center gap-1.5">${ic('trophy','w-3.5 h-3.5')} Campeão</div>
-        <div class="font-display font-extrabold text-base mt-1 flex items-center justify-center gap-2">${flag(champ)} ${champ}</div>
-      </div>`:''}
-    </div>`;
-  }).join("");
-  return `<div class="bracket-scroll"><div class="bracket-wrapper">${cols}</div></div>`;
+  const byId = Object.fromEntries([
+    ...k.R32, ...k.R16, ...k.QF, ...k.SF, k.final
+  ].map(m=>[m.matchNo,m]));
+  const stack = (title, ids, cls="") => `<div class="bracket-stack ${cls}">
+    <div class="bracket-round-title">${title}</div>
+    <div class="bracket-stack-matches">${ids.map(id=>bracketMatchCard(byId[id], champ, modeFn(byId[id]))).join("")}</div>
+  </div>`;
+  const finalMode = modeFn(k.final);
+  const champKnown = champ && finalMode === "full";
+  return `<div class="bracket-scroll"><div class="bracket-stage">
+    <div class="bracket-side bracket-left">
+      ${stack("16-avos", [74,77,73,75,83,84,81,82], "r32")}
+      ${stack("Oitavas", [89,90,93,94], "r16")}
+      ${stack("Quartas", [97,98], "qf")}
+      ${stack("Semifinal", [101], "sf")}
+    </div>
+    <div class="bracket-center">
+      <div class="bracket-final-node">
+        <div class="bracket-round-title text-gold-600">Final</div>
+        ${bracketMatchCard(k.final, champ, finalMode)}
+        ${champKnown?`<div class="bracket-champ-banner">
+          <div class="text-[10px] uppercase tracking-widest font-extrabold text-gold-600 flex items-center justify-center gap-1.5">${ic('trophy','w-3.5 h-3.5')} Campeão</div>
+          <div class="font-display font-extrabold text-base mt-1 flex items-center justify-center gap-2">${flag(champ)} ${champ}</div>
+        </div>`:''}
+      </div>
+    </div>
+    <div class="bracket-side bracket-right">
+      ${stack("Semifinal", [102], "sf")}
+      ${stack("Quartas", [99,100], "qf")}
+      ${stack("Oitavas", [91,92,95,96], "r16")}
+      ${stack("16-avos", [76,78,79,80,86,88,85,87], "r32")}
+    </div>
+  </div></div>`;
 }
 function renderBracket(){
   const s=currentSim(), k=s.knockout, champ=s.champion;
@@ -169,7 +182,7 @@ function renderBracket(){
 }
 function knockoutDetailCard(title, m){
   return `<div class="glass card-hover rounded-3xl p-5 shadow-glass">
-    <div class="text-[11px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">${title} · ${m.city}</div>
+    <div class="text-[11px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">${title} · ${m.kickoff || m.city}</div>
     <div class="flex items-center justify-center gap-3 sm:gap-5 mt-3">
       <div class="flex-1 text-right font-display font-extrabold text-lg flex items-center justify-end gap-2 ${m.winner.team===m.home?'':'text-slate-400'}">${m.home} ${flag(m.home)}</div>
       <div class="px-3 py-1 rounded-xl bg-ink text-white font-extrabold tnum text-lg">${scoreLine(m)}</div>
@@ -199,7 +212,7 @@ function openMatchModal(m){
       <div class="px-3 py-1.5 rounded-xl bg-ink text-white font-extrabold tnum text-xl">${scoreLine(m)}</div>
       <div class="flex-1 text-left font-display font-extrabold text-xl ${m.winner&&m.winner.team===m.away?'':'text-slate-400'}">${flag(m.away)} ${m.away}</div>
     </div>
-    <div class="text-center text-xs text-slate-400 mt-2">${m.city} · ${m.venue}</div>
+    <div class="text-center text-xs text-slate-400 mt-2">${matchScheduleLine(m)}</div>
     ${goalChips(m)}`;
   $("#modalBox").querySelector("[data-close]").onclick=closeModal;
   modal.classList.remove("hidden"); modal.classList.add("flex");

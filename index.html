@@ -63,14 +63,14 @@
       </a>
 
       <div class="hidden lg:flex items-center gap-1 text-[13px] font-semibold text-slate-600">
+        <a class="nav-link active px-3 py-2 rounded-lg hover:text-ink" href="#overview">Resultado</a>
         <a class="nav-link px-3 py-2 rounded-lg hover:text-ink" href="#minha">Minha Seleção</a>
-        <a class="nav-link active px-3 py-2 rounded-lg hover:text-ink" href="#overview">Visão Geral</a>
-        <a class="nav-link px-3 py-2 rounded-lg hover:text-ink" href="#grupos">Grupos</a>
-        <a class="nav-link px-3 py-2 rounded-lg hover:text-ink" href="#jogos">Jogos</a>
-        <a class="nav-link px-3 py-2 rounded-lg hover:text-ink" href="#terceiros">Terceiros</a>
         <a class="nav-link px-3 py-2 rounded-lg hover:text-ink" href="#mata">Mata-mata</a>
-        <a class="nav-link px-3 py-2 rounded-lg hover:text-ink" href="#roteiro">Roteiro</a>
+        <a class="nav-link px-3 py-2 rounded-lg hover:text-ink" href="#grupos">Grupos</a>
+        <a class="nav-link px-3 py-2 rounded-lg hover:text-ink" href="#terceiros">Terceiros</a>
+        <a class="nav-link px-3 py-2 rounded-lg hover:text-ink" href="#jogos">Jogos</a>
         <a class="nav-link px-3 py-2 rounded-lg hover:text-ink" href="#stats">Estatísticas</a>
+        <a class="nav-link px-3 py-2 rounded-lg hover:text-ink" href="#roteiro">Roteiro</a>
       </div>
 
       <button id="navGenerate" class="btn-premium text-white text-[13px] font-bold px-4 py-2 rounded-xl hidden sm:flex items-center gap-2">
@@ -86,14 +86,14 @@
 
     <!-- mobile menu -->
     <div id="mobMenu" class="lg:hidden hidden border-t border-white/40 px-4 py-3 grid grid-cols-2 gap-1 text-sm font-semibold text-slate-700">
+      <a class="px-3 py-2 rounded-lg hover:bg-white/60" href="#overview">Resultado</a>
       <a class="px-3 py-2 rounded-lg hover:bg-white/60" href="#minha">Minha Seleção</a>
-      <a class="px-3 py-2 rounded-lg hover:bg-white/60" href="#overview">Visão Geral</a>
-      <a class="px-3 py-2 rounded-lg hover:bg-white/60" href="#grupos">Grupos</a>
-      <a class="px-3 py-2 rounded-lg hover:bg-white/60" href="#jogos">Jogos</a>
-      <a class="px-3 py-2 rounded-lg hover:bg-white/60" href="#terceiros">Terceiros</a>
       <a class="px-3 py-2 rounded-lg hover:bg-white/60" href="#mata">Mata-mata</a>
-      <a class="px-3 py-2 rounded-lg hover:bg-white/60" href="#roteiro">Roteiro</a>
+      <a class="px-3 py-2 rounded-lg hover:bg-white/60" href="#grupos">Grupos</a>
+      <a class="px-3 py-2 rounded-lg hover:bg-white/60" href="#terceiros">Terceiros</a>
+      <a class="px-3 py-2 rounded-lg hover:bg-white/60" href="#jogos">Jogos</a>
       <a class="px-3 py-2 rounded-lg hover:bg-white/60" href="#stats">Estatísticas</a>
+      <a class="px-3 py-2 rounded-lg hover:bg-white/60" href="#roteiro">Roteiro</a>
       <button id="mobGenerate" class="col-span-2 btn-premium text-white font-bold px-3 py-2 rounded-lg mt-1">Gerar por tipo</button>
     </div>
   </div>
@@ -132,9 +132,6 @@
     <!-- simulation tabs -->
     <div id="simTabs" class="mt-7 flex flex-wrap gap-2 reveal"></div>
 
-    <!-- quick cards -->
-    <div id="heroCards" class="mt-7 grid sm:grid-cols-3 gap-4 reveal"></div>
-
     <div class="mt-7 flex flex-wrap items-center gap-3 reveal">
       <button id="heroGenerate" class="btn-premium text-white font-bold px-6 py-3.5 rounded-2xl flex items-center gap-2">
         <i data-lucide="refresh-cw" class="w-[18px] h-[18px]"></i>
@@ -150,6 +147,28 @@
   </div>
 </section>
 
+
+<!-- ============================================================= -->
+<!-- OVERVIEW / RESUMO                                              -->
+<!-- ============================================================= -->
+<section id="overview" class="max-w-7xl mx-auto px-4 sm:px-6 py-10 scroll-mt-20">
+  <div class="flex items-end justify-between gap-4 mb-6">
+    <div>
+      <h2 class="font-display font-extrabold text-2xl sm:text-3xl tracking-tight">Resultado da Copa</h2>
+      <p id="ovTone" class="text-slate-500 mt-1 text-sm font-medium"></p>
+    </div>
+  </div>
+  <!-- final + podium banner -->
+  <div id="podium"></div>
+  <div id="heroCards" class="mt-5 grid sm:grid-cols-3 gap-4 reveal"></div>
+  <div class="mt-8 mb-4">
+    <h3 class="font-display font-extrabold text-xl tracking-tight">Prêmios e destaques</h3>
+    <p class="text-slate-500 mt-1 text-sm font-medium">Os principais personagens da simulação, em leitura rápida.</p>
+  </div>
+  <div id="overviewGrid" class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4"></div>
+</section>
+
+
 <!-- ============================================================= -->
 <!-- MINHA SELEÇÃO                                                  -->
 <!-- ============================================================= -->
@@ -164,21 +183,24 @@
   <div id="myTeamWrap"></div>
 </section>
 
-<!-- ============================================================= -->
-<!-- OVERVIEW / RESUMO                                              -->
-<!-- ============================================================= -->
-<section id="overview" class="max-w-7xl mx-auto px-4 sm:px-6 py-10 scroll-mt-20">
-  <div class="flex items-end justify-between gap-4 mb-6">
-    <div>
-      <h2 class="font-display font-extrabold text-2xl sm:text-3xl tracking-tight">Resumo da simulação</h2>
-      <p id="ovTone" class="text-slate-500 mt-1 text-sm font-medium"></p>
-    </div>
-  </div>
-  <div id="overviewGrid" class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4"></div>
 
-  <!-- final + podium banner -->
-  <div id="podium" class="mt-6"></div>
+<!-- ============================================================= -->
+<!-- MATA-MATA                                                      -->
+<!-- ============================================================= -->
+<section id="mata" class="max-w-7xl mx-auto px-4 sm:px-6 py-10 scroll-mt-20">
+  <div class="mb-6">
+    <h2 class="font-display font-extrabold text-2xl sm:text-3xl tracking-tight">Chaveamento do mata-mata</h2>
+    <p class="text-slate-500 mt-1 text-sm font-medium">32 seleções · árvore espelhada dos 16-avos até a final. Clique numa partida para ver gols e resumo.</p>
+  </div>
+
+  <div class="glass rounded-3xl shadow-glass p-3 sm:p-5 overflow-hidden">
+    <div id="rankingProtectionWrap" class="mb-4"></div>
+    <div id="bracket" class="bracket"></div>
+  </div>
+
+  <div id="thirdFinalWrap" class="grid md:grid-cols-2 gap-5 mt-5"></div>
 </section>
+
 
 <!-- ============================================================= -->
 <!-- GRUPOS                                                         -->
@@ -197,6 +219,19 @@
   </div>
   <div id="groupsGrid" class="grid md:grid-cols-2 xl:grid-cols-3 gap-5"></div>
 </section>
+
+
+<!-- ============================================================= -->
+<!-- TERCEIROS                                                      -->
+<!-- ============================================================= -->
+<section id="terceiros" class="max-w-7xl mx-auto px-4 sm:px-6 py-10 scroll-mt-20">
+  <div class="mb-6">
+    <h2 class="font-display font-extrabold text-2xl sm:text-3xl tracking-tight">Ranking dos terceiros colocados</h2>
+    <p class="text-slate-500 mt-1 text-sm font-medium">Os 8 melhores entre os 12 grupos avançam ao mata-mata de 32.</p>
+  </div>
+  <div id="thirdsWrap" class="glass rounded-3xl shadow-glass overflow-hidden"></div>
+</section>
+
 
 <!-- ============================================================= -->
 <!-- JOGOS                                                          -->
@@ -220,44 +255,6 @@
   <div id="matchesWrap" class="space-y-3"></div>
 </section>
 
-<!-- ============================================================= -->
-<!-- TERCEIROS                                                      -->
-<!-- ============================================================= -->
-<section id="terceiros" class="max-w-7xl mx-auto px-4 sm:px-6 py-10 scroll-mt-20">
-  <div class="mb-6">
-    <h2 class="font-display font-extrabold text-2xl sm:text-3xl tracking-tight">Ranking dos terceiros colocados</h2>
-    <p class="text-slate-500 mt-1 text-sm font-medium">Os 8 melhores entre os 12 grupos avançam ao mata-mata de 32.</p>
-  </div>
-  <div id="thirdsWrap" class="glass rounded-3xl shadow-glass overflow-hidden"></div>
-</section>
-
-<!-- ============================================================= -->
-<!-- MATA-MATA                                                      -->
-<!-- ============================================================= -->
-<section id="mata" class="max-w-7xl mx-auto px-4 sm:px-6 py-10 scroll-mt-20">
-  <div class="mb-6">
-    <h2 class="font-display font-extrabold text-2xl sm:text-3xl tracking-tight">Chaveamento do mata-mata</h2>
-    <p class="text-slate-500 mt-1 text-sm font-medium">32 seleções · árvore espelhada da fase de 32 até a final. Clique numa partida para ver gols e resumo.</p>
-  </div>
-
-  <div class="glass rounded-3xl shadow-glass p-3 sm:p-5 overflow-hidden">
-    <div id="rankingProtectionWrap" class="mb-4"></div>
-    <div id="bracket" class="bracket"></div>
-  </div>
-
-  <div id="thirdFinalWrap" class="grid md:grid-cols-2 gap-5 mt-5"></div>
-</section>
-
-<!-- ============================================================= -->
-<!-- ROTEIRO / NARRATIVA                                            -->
-<!-- ============================================================= -->
-<section id="roteiro" class="max-w-7xl mx-auto px-4 sm:px-6 py-10 scroll-mt-20">
-  <div class="mb-6">
-    <h2 class="font-display font-extrabold text-2xl sm:text-3xl tracking-tight">O roteiro desta Copa</h2>
-    <p class="text-slate-500 mt-1 text-sm font-medium">Como a história foi escrita — favoritos, surpresas, heróis e a construção da final.</p>
-  </div>
-  <article id="narrative" class="grid lg:grid-cols-3 gap-5"></article>
-</section>
 
 <!-- ============================================================= -->
 <!-- ESTATÍSTICAS                                                   -->
@@ -268,6 +265,18 @@
     <p class="text-slate-500 mt-1 text-sm font-medium">Artilheiros, assistências, seleção ideal e os números do torneio.</p>
   </div>
   <div id="statsWrap" class="grid lg:grid-cols-3 gap-5"></div>
+</section>
+
+
+<!-- ============================================================= -->
+<!-- ROTEIRO / NARRATIVA                                            -->
+<!-- ============================================================= -->
+<section id="roteiro" class="max-w-7xl mx-auto px-4 sm:px-6 py-10 scroll-mt-20">
+  <div class="mb-6">
+    <h2 class="font-display font-extrabold text-2xl sm:text-3xl tracking-tight">O roteiro desta Copa</h2>
+    <p class="text-slate-500 mt-1 text-sm font-medium">Como a história foi escrita — favoritos, surpresas, heróis e a construção da final.</p>
+  </div>
+  <article id="narrative" class="grid lg:grid-cols-3 gap-5"></article>
 </section>
 
 </main>
@@ -303,8 +312,10 @@
 <!-- ============================================================= -->
 <script src="./src/data/worldcup-data.js"></script>
 <script src="./src/data/venues.js"></script>
+<script src="./src/data/worldcup-calendar.js"></script>
 <script src="./src/engine/random.js"></script>
 <script src="./src/engine/scoring.js"></script>
+<script src="./src/engine/lineups.js"></script>
 <script src="./src/domain/bracket/top-seed-protection.js"></script>
 <script src="./src/engine/simulation.js"></script>
 <script src="./src/app/narrative.js"></script>

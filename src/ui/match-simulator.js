@@ -30,10 +30,16 @@ function matchStageTone(match){
   if(stage.includes("Semifinal")) return {label, cls:"stage-semi"};
   if(stage.includes("Quartas")) return {label, cls:"stage-qf"};
   if(stage.includes("Oitavas")) return {label, cls:"stage-r16"};
-  if(stage.includes("32")) return {label, cls:"stage-r32"};
+  if(stage.includes("16-avos") || stage.includes("32")) return {label, cls:"stage-r32"};
   if(round==="3") return {label, cls:"stage-group-3"};
   if(round==="2") return {label, cls:"stage-group-2"};
   return {label, cls:"stage-group-1"};
+}
+function compactPlayerName(name){
+  const parts = String(name || "").trim().split(/\s+/).filter(Boolean);
+  if(parts.length <= 1) return name;
+  const rest = parts.slice(1).join(" ").replace(/\bJr\b\.?/i, "Junior");
+  return `${parts[0][0]}. ${rest}`;
 }
 function openMatchSimulator(match, journeyIndex=0){
   closeModal();
@@ -57,7 +63,7 @@ function openMatchSimulator(match, journeyIndex=0){
     <div class="flex flex-wrap items-center justify-between gap-3 pr-8">
       <div>
         <div class="text-[11px] uppercase tracking-widest font-extrabold text-slate-400">${match.matchNo?`M${match.matchNo} · `:''}${match.stage}</div>
-        <div class="text-sm text-slate-500 font-semibold mt-1">${match.city} · ${match.venue}</div>
+        <div class="text-sm text-slate-500 font-semibold mt-1">${matchScheduleLine(match)}</div>
       </div>
       ${renderSimulationTypeBadge(type)}
     </div>
@@ -115,7 +121,14 @@ function simulateMatch(match){
   appState.matchAnimationStarted=true;
   const totalMs = match.pens ? 28000 : match.aet ? 25000 : 20000;
   const virtualMax = match.aet ? 120 : 90;
-  const goals = (match.goals||[]).map(g=>({...g, norm:normalizeGoalMinute(g.minute, match)})).sort((a,b)=>a.norm.value-b.norm.value);
+  const goals = (match.goals||[]).map(g=>({...g, kind:"goal", norm:normalizeGoalMinute(g.minute, match)}));
+  const subWindows = Object.values((match.substitutions||[]).reduce((acc,s)=>{
+    const key = [s.team, s.minute, s.window, s.extraTime ? "et" : "", s.concussion ? "conc" : ""].join("|");
+    acc[key] = acc[key] || {...s, kind:"subWindow", norm:normalizeGoalMinute(s.minute, match), changes:[]};
+    acc[key].changes.push(s);
+    return acc;
+  }, {}));
+  const events = [...goals, ...subWindows].sort((a,b)=>a.norm.value-b.norm.value || (a.kind==="goal" ? -1 : 1));
   let shown=0, homeGoals=0, awayGoals=0;
   const scoreEl=$("#simScore"), clockEl=$("#simClock"), progressEl=$("#simProgress"), timeline=$("#simTimeline"), summary=$("#simSummary");
   const homeSide=$("#simHomeSide"), awaySide=$("#simAwaySide"), phaseEl=$("#simPhase");
@@ -137,18 +150,39 @@ function simulateMatch(match){
     clockEl.textContent = `${String(minute).padStart(2,"0")}'`;
     phaseEl.textContent = matchPhaseLabel(minute, match);
     progressEl.style.width = `${Math.min(100,ratio*100)}%`;
-    while(shown<goals.length && goals[shown].norm.value<=minute){
-      const g=goals[shown++];
-      if(g.team===match.home) homeGoals++; else awayGoals++;
-      scoreEl.textContent = `${homeGoals} x ${awayGoals}`;
-      flash(g.team);
-      addEvent(`<div class="flex items-start gap-3">
-        <div class="grid place-items-center w-9 h-9 rounded-full bg-mxgreen/12 text-mxgreen font-extrabold">⚽</div>
-        <div>
-          <div class="font-extrabold text-slate-800">${g.norm.display} — ${g.player} marca para ${flag(g.team)} ${g.team}</div>
-          <div class="text-sm text-slate-500">${g.type}${g.assist?` · assistência de ${g.assist}`:""} · placar ${homeGoals} x ${awayGoals}</div>
-        </div>
-      </div>`);
+    while(shown<events.length && events[shown].norm.value<=minute){
+      const ev=events[shown++];
+      if(ev.kind==="goal"){
+        const g=ev;
+        if(g.team===match.home) homeGoals++; else awayGoals++;
+        scoreEl.textContent = `${homeGoals} x ${awayGoals}`;
+        flash(g.team);
+        addEvent(`<div class="flex items-start gap-3">
+          <div class="grid place-items-center w-9 h-9 rounded-full bg-mxgreen/12 text-mxgreen font-extrabold">⚽</div>
+          <div>
+            <div class="font-extrabold text-slate-800">${g.norm.display} — ${g.player} marca para ${flag(g.team)} ${g.team}</div>
+            <div class="text-sm text-slate-500">${g.type}${g.assist?` · assistência de ${g.assist}`:""} · placar ${homeGoals} x ${awayGoals}</div>
+          </div>
+        </div>`);
+      } else {
+        const note = ev.concussion ? "substituição extra por concussão" : ev.extraTime ? "troca extra na prorrogação" : ev.window==="intervalo" ? "troca no intervalo" : `janela ${ev.window}`;
+        const changes = ev.changes || [ev];
+        addEvent(`<div class="flex items-start gap-3">
+          <div class="grid place-items-center w-9 h-9 rounded-full bg-usablue/10 text-usablue font-extrabold">${ic('repeat-2','w-4 h-4')}</div>
+          <div class="min-w-0 flex-1">
+            <div class="font-extrabold text-slate-800">${ev.norm.display} — ${flag(ev.team)} ${ev.team} mexe no time</div>
+            <div class="text-sm text-slate-500">${note}${changes.length>1?` · ${changes.length} trocas`:''}</div>
+            <div class="mt-2 grid sm:grid-cols-2 gap-1.5">
+              ${changes.map(s=>`<div class="rounded-xl bg-slate-50/90 border border-slate-100 px-2.5 py-1.5 text-xs font-semibold text-slate-600">
+                <span class="text-mxgreen">${compactPlayerName(s.in.name)}</span>
+                <span class="text-slate-300 px-1">por</span>
+                <span class="text-slate-500">${compactPlayerName(s.out.name)}</span>
+              </div>`).join("")}
+            </div>
+          </div>
+        </div>`);
+        paintIcons();
+      }
     }
     if(ratio>=1){
       clearInterval(appState.matchTimer);
@@ -170,7 +204,7 @@ function simulateMatch(match){
         const fav=getFavoriteTeam();
         const favPlayed=match.home===fav||match.away===fav;
         const favWon=favPlayed && getMatchWinnerTeam(match)===fav;
-        summary.innerHTML = `${flag(match.winner?.team||getMatchWinnerTeam(match)||match.home)} <b>${match.winner?.team||getMatchWinnerTeam(match)||"Empate"}</b> ${getMatchWinnerTeam(match)?"vence a partida":"fica no empate"} por <b>${scoreLine(match)}</b> em ${match.city}. ${favPlayed?(favWon?"Sua seleção venceu este capítulo da jornada.":"Sua seleção não venceu este jogo."):""}`;
+        summary.innerHTML = `${flag(match.winner?.team||getMatchWinnerTeam(match)||match.home)} <b>${match.winner?.team||getMatchWinnerTeam(match)||"Empate"}</b> ${getMatchWinnerTeam(match)?"vence a partida":"fica no empate"} por <b>${scoreLine(match)}</b> em ${match.city}. ${match.substitutions?.length?`Foram ${match.substitutions.length} substituição(ões) registradas seguindo a regra FIFA. `:""}${favPlayed?(favWon?"Sua seleção venceu este capítulo da jornada.":"Sua seleção não venceu este jogo."):""}`;
         if(favPlayed && favWon) celebrateConfetti();
       }
     }

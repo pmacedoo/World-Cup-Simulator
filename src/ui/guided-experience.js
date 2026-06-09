@@ -95,7 +95,7 @@ function campaignSummary(sim, team){
   return {status:"alive", title:"Campanha em destaque.", text:`${flag(team)} ${team} fez uma campanha de ${matches.length} jogo(s), passando pelo Grupo ${row?.group||"?"} e deixando sua marca nesta simulação.`};
 }
 /* ---- Revelação progressiva sem spoilers ---- */
-const KO_ORDER = {"Fase de 32":1,"Oitavas de final":2,"Quartas de final":3,"Semifinal":4,"Disputa de 3º lugar":4,"Final":5};
+const KO_ORDER = {"16-avos":1,"Fase de 32":1,"Oitavas de final":2,"Quartas de final":3,"Semifinal":4,"Disputa de 3º lugar":4,"Final":5};
 const isGroupStage = m => (m.stage||"").includes("Grupo");
 // fronteira de mata-mata já vivida pela favorita (maior fase entre os jogos revelados)
 function favoriteFrontierKO(matches, revealed){
@@ -133,6 +133,25 @@ function compactGroupCard(g, favTeam){
   </div>`;
 }
 // modal de "situação da Copa neste momento" (grupos parciais ou chave parcial)
+function showSnapshotModal(title, body){
+  let modal=$("#snapshotModal");
+  if(!modal){
+    modal=el("div","fixed inset-0 z-[75] hidden items-center justify-center p-3 sm:p-5");
+    modal.id="snapshotModal";
+    modal.innerHTML=`<div class="absolute inset-0 bg-ink/55 backdrop-blur-xl" data-close></div>
+      <div id="snapshotBox" class="relative guided-card rounded-[2rem] shadow-lift w-full max-w-5xl max-h-[92vh] overflow-y-auto p-5 sm:p-7 swap"></div>`;
+    document.body.appendChild(modal);
+    modal.addEventListener("click",e=>{ if(e.target.dataset.close!==undefined){ modal.classList.add("hidden"); modal.classList.remove("flex"); } });
+  }
+  $("#snapshotBox").innerHTML=`
+    <button class="absolute top-4 right-4 text-slate-400 hover:text-ink" data-close>✕</button>
+    <div class="text-[11px] uppercase tracking-widest font-extrabold text-slate-400">Situação da Copa</div>
+    <h3 class="font-display font-extrabold text-2xl mb-4">${title}</h3>
+    ${body}`;
+  $("#snapshotBox").querySelector("[data-close]").onclick=()=>{ modal.classList.add("hidden"); modal.classList.remove("flex"); };
+  modal.classList.remove("hidden"); modal.classList.add("flex");
+  paintIcons();
+}
 function openSnapshot(kind, journeyIndex){
   const record=activeRecord(); const sim=simObjFor(record); const team=record.favoriteTeam;
   const matches=getTeamMatches(sim,team); const m=matches[journeyIndex]; if(!m) return;
@@ -160,23 +179,45 @@ function openSnapshot(kind, journeyIndex){
       body = `<p class="text-sm text-slate-500 mb-3">Rodadas decididas aparecem com o placar; a rodada atual mostra os confrontos sem resultado; rodadas futuras ficam como <b>“A definir”</b> para não estragar a surpresa.</p>${buildBracketHTML(sim, null, modeFn)}`;
     }
   }
-  let modal=$("#snapshotModal");
-  if(!modal){
-    modal=el("div","fixed inset-0 z-[75] hidden items-center justify-center p-3 sm:p-5");
-    modal.id="snapshotModal";
-    modal.innerHTML=`<div class="absolute inset-0 bg-ink/55 backdrop-blur-xl" data-close></div>
-      <div id="snapshotBox" class="relative guided-card rounded-[2rem] shadow-lift w-full max-w-5xl max-h-[92vh] overflow-y-auto p-5 sm:p-7 swap"></div>`;
-    document.body.appendChild(modal);
-    modal.addEventListener("click",e=>{ if(e.target.dataset.close!==undefined){ modal.classList.add("hidden"); modal.classList.remove("flex"); } });
+  showSnapshotModal(title, body);
+}
+function openDaySnapshot(kind){
+  const record=activeRecord(); if(!record) return;
+  const ctx=journeyVisibleContext(record);
+  const {sim, team, matches, revealed, dayPhase, nextMatch, currentRound}=ctx;
+  let title="", body="";
+  if(kind==="groups"){
+    const uptoRound = dayPhase==="morning" ? currentRound : Math.max(currentRound, 0);
+    const groups=partialStandings(sim, uptoRound);
+    title = uptoRound ? `Grupos no estado do dia · Rodada ${uptoRound}` : "Grupos antes da estreia";
+    body = `<p class="text-sm text-slate-500 mb-3">Mostra apenas o estado já vivido na jornada, sem antecipar o próximo jogo da sua seleção.</p>
+      <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">${groups.map(g=>compactGroupCard(g,team)).join("")}</div>`;
+  } else {
+    const revealedMatches=matches.slice(0,revealed);
+    const nextKO = nextMatch && !isGroupStage(nextMatch);
+    const frontier = nextKO ? (KO_ORDER[nextMatch.stage]||1) : favoriteFrontierKO(matches, revealed);
+    const favNos=new Set(revealedMatches.filter(x=>!isGroupStage(x)).map(x=>x.matchNo));
+    if(!frontier){
+      title="Chaveamento do dia";
+      body=`<div class="glass rounded-2xl p-8 text-center text-slate-500 font-semibold">O mata-mata ainda não começou para ${flag(team)} ${team}. Quando a jornada chegar lá, este painel mostra a chave sem entregar resultados futuros.</div>`;
+    } else {
+      const modeFn = mm => {
+        const o=KO_ORDER[mm.stage]||9;
+        if(favNos.has(mm.matchNo) || o<frontier) return 'full';
+        if(o===frontier) return 'teams';
+        return 'locked';
+      };
+      title="Chaveamento no estado do dia";
+      body = `<p class="text-sm text-slate-500 mb-3">Rodadas já vividas aparecem com placar; o momento atual mostra confrontos sem resultado; fases futuras ficam como <b>“A definir”</b>.</p>${buildBracketHTML(sim, null, modeFn)}`;
+    }
   }
-  $("#snapshotBox").innerHTML=`
-    <button class="absolute top-4 right-4 text-slate-400 hover:text-ink" data-close>✕</button>
-    <div class="text-[11px] uppercase tracking-widest font-extrabold text-slate-400">Situação da Copa</div>
-    <h3 class="font-display font-extrabold text-2xl mb-4">${title}</h3>
-    ${body}`;
-  $("#snapshotBox").querySelector("[data-close]").onclick=()=>{ modal.classList.add("hidden"); modal.classList.remove("flex"); };
-  modal.classList.remove("hidden"); modal.classList.add("flex");
-  paintIcons();
+  showSnapshotModal(title, body);
+}
+function daySnapshotButtons(){
+  return `<div class="mt-3 grid grid-cols-2 gap-2">
+    <button class="day-snap-btn glass rounded-xl px-3 py-2 text-xs font-extrabold text-slate-600 flex items-center justify-center gap-1.5" data-snap="groups">${ic('table-2','w-3.5 h-3.5')} Grupos agora</button>
+    <button class="day-snap-btn glass rounded-xl px-3 py-2 text-xs font-extrabold text-slate-600 flex items-center justify-center gap-1.5" data-snap="bracket">${ic('git-fork','w-3.5 h-3.5')} Chaveamento agora</button>
+  </div>`;
 }
 // lista da campanha revelada progressivamente (sem spoilers de jogos futuros)
 function progressiveCampaign(record){
@@ -189,12 +230,10 @@ function progressiveCampaign(record){
     const m=matches[i];
     html+=`<div class="journey-match-card glass rounded-3xl p-4 pl-14 shadow-glass ${m.favoriteWon?'border-mxgreen/20':''}">
       <div class="absolute left-[13px] top-5 grid place-items-center w-10 h-10 rounded-full bg-white shadow-glass border border-white/80 font-extrabold text-xs ${m.favoriteWon?'text-mxgreen':m.favoriteDrew?'text-slate-500':'text-usared'}">${i+1}</div>
-      <div class="text-[11px] uppercase tracking-wider font-extrabold text-slate-400">${m.matchNo?`M${m.matchNo} · `:''}${m.stage} · ${m.city}</div>
+      <div class="text-[11px] uppercase tracking-wider font-extrabold text-slate-400">${m.matchNo?`M${m.matchNo} · `:''}${m.stage} · ${m.kickoff || m.city}</div>
       <div class="mt-1 font-display font-extrabold text-lg flex flex-wrap items-center gap-2">${flag(m.home)} ${m.home} <span class="px-2 py-0.5 rounded-xl bg-ink text-white tnum">${scoreLine(m)}</span> ${flag(m.away)} ${m.away}</div>
       <div class="text-sm text-slate-500 mt-1">${m.goals.length?`${m.goals.length} gol(s): ${m.goals.slice(0,3).map(g=>`${g.minute}' ${g.player}`).join(" · ")}${m.goals.length>3?"...":""}`:"Sem gols no tempo jogado."}</div>
       <div class="mt-3 flex flex-wrap gap-2">
-        <button class="snap-btn glass rounded-xl px-3 py-1.5 text-xs font-bold text-slate-600" data-snap="groups" data-idx="${i}">${ic('table-2','w-3.5 h-3.5')} Grupos agora</button>
-        <button class="snap-btn glass rounded-xl px-3 py-1.5 text-xs font-bold text-slate-600" data-snap="bracket" data-idx="${i}">${ic('git-fork','w-3.5 h-3.5')} Chaveamento agora</button>
         <button class="replay-btn glass rounded-xl px-3 py-1.5 text-xs font-bold text-slate-600" data-idx="${i}">${ic('rotate-ccw','w-3.5 h-3.5')} Rever jogo</button>
       </div>
     </div>`;
@@ -204,7 +243,7 @@ function progressiveCampaign(record){
     html+=`<div class="journey-match-card glass rounded-3xl p-4 pl-14 shadow-glass" style="box-shadow:0 0 0 2px rgba(10,49,97,.25),0 12px 36px -22px rgba(15,23,42,.5)">
       <div class="absolute left-[13px] top-5 grid place-items-center w-10 h-10 rounded-full text-white shadow-glass font-extrabold text-xs" style="background:var(--grad-2026)">${revealed+1}</div>
       <div class="text-[11px] uppercase tracking-wider font-extrabold text-usablue">Próximo jogo${m.matchNo?` · M${m.matchNo}`:''}</div>
-      <div class="text-[11px] uppercase tracking-wider font-extrabold text-slate-400">${m.stage} · ${m.city}</div>
+      <div class="text-[11px] uppercase tracking-wider font-extrabold text-slate-400">${m.stage} · ${m.kickoff || m.city}</div>
       <div class="mt-1 font-display font-extrabold text-lg flex flex-wrap items-center gap-2">${flag(m.home)} ${m.home} <span class="px-2 py-0.5 rounded-xl bg-slate-200 text-slate-500 tnum text-sm">VS</span> ${flag(m.away)} ${m.away}</div>
       <div class="text-sm text-slate-500 mt-1">Resultado oculto — simule a partida para viver o placar.</div>
       <button class="simulate-team-match btn-premium text-white font-bold px-4 py-2.5 rounded-2xl mt-3" data-match-index="${revealed}">${ic('play','w-4 h-4')} Simular partida</button>
@@ -291,6 +330,21 @@ function groupRoundMatches(sim, round, excludeTeam=null){
 function pickMatch(matches, index=0){
   return matches.length ? matches[index % matches.length] : null;
 }
+function matchHeadlinePlayer(match, fallbackTeam){
+  const goal = match?.goals?.slice().sort((a,b)=>b.minute-a.minute)[0];
+  return goal?.player || newsPlayer(fallbackTeam || match?.home || match?.away, 0);
+}
+function matchResultMood(match){
+  if(!match) return "jogo aberto";
+  const total=(match.ga||0)+(match.gb||0);
+  const diff=Math.abs((match.ga||0)-(match.gb||0));
+  if(match.pens) return "drama nos pênaltis";
+  if(match.aet) return "noite de prorrogação";
+  if(diff>=3) return "placar pesado";
+  if(total>=4) return "jogo aberto";
+  if(total<=1) return "partida travada";
+  return "resultado controlado";
+}
 function journeyNewsItems(ctx){
   const {sim, team, revealed, finished, revealedMatches, nextMatch, partialGroup, allPartialGroups, currentRound}=ctx;
   const last=revealedMatches[revealedMatches.length-1];
@@ -317,20 +371,28 @@ function journeyNewsItems(ctx){
   const otherB = groupLeaders[1]?.row?.team || groupRivals[1] || team;
   const otherC = tightGroup?.second?.team || groupLeaders[2]?.row?.team || groupRivals[2] || team;
   const otherD = groupLeaders[3]?.row?.team || otherA;
+  const pressureMeta = row ? `${row.pos}º no grupo · ${row.P} ponto(s)` : "Primeiro capítulo da campanha";
   if(ctx.dayPhase==="morning"){
     const prepMatch=nextMatch;
     const opponent=prepMatch?.opponent || groupRivals[0] || otherA;
+    const homeAway = prepMatch?.home===team ? "como mandante da tabela" : "fora da ordem principal da tabela";
+    const needsResult = row && row.P <= 1 && newsRound >= 2;
+    const comfortable = row && row.pos <= 2 && row.P >= 4;
     return [
-      {type:"good", section:`Manhã · ${roundLabel}`, tag:"PREPARAÇÃO", title:`${flag(team)} ${team} ajusta plano para o jogo`, text:`A comissão de ${TEAMS[team].coach} fecha os últimos detalhes antes de encarar ${opponent}.`, meta:nextLine},
-      {type:"good", section:`Manhã · ${roundLabel}`, tag:"CRAQUE", title:`${flag(team)} ${key} chega como trunfo`, text:`O jogador é tratado internamente como a peça capaz de mudar o ritmo da partida.`, meta:"Pré-jogo"},
-      {type:"good", section:`Manhã · ${roundLabel}`, tag:"TREINO", title:`${flag(team)} ${secondKey} anima bastidores`, text:`A atividade final aumenta a confiança do elenco antes do compromisso do dia.`, meta:row?`${row.P} ponto(s), SG ${row.SG>0?"+":""}${row.SG}`:"Campanha zerada"},
-      {type:"bad", section:`Manhã · ${roundLabel}`, tag:"DÚVIDA FÍSICA", title:`${flag(team)} ${newsPlayer(team,2)} preocupa comissão`, text:`A condição física vira assunto de bastidor e pode alterar o plano inicial da seleção.`, meta:"Monitoramento até o jogo"},
-      {type:"bad", section:`Manhã · ${roundLabel}`, tag:"CLIMA DE PRESSÃO", title:`${flag(opponent)} ${opponent} promete jogo duro`, text:`O adversário tenta transformar a preparação em pressão e levar a partida para detalhes.`, meta:nextLine},
-      {type:"good", section:`Manhã · Rodada ${newsRound}`, tag:"PANORAMA", title:`${flag(otherA)} ${otherA} chega embalado em outro grupo`, text:`A seleção aparece como destaque de preparação entre os jogos paralelos da rodada.`, meta:groupLeaders[0]?`Grupo ${groupLeaders[0].group.letter}`:"Central da Copa"},
-      {type:"bad", section:`Manhã · Rodada ${newsRound}`, tag:"BASTIDOR", title:`${flag(otherB)} ${newsPlayer(otherB,0)} vira dúvida antes do jogo`, text:`O nome mais observado da seleção passa a manhã cercado de expectativa.`, meta:groupLeaders[1]?`Grupo ${groupLeaders[1].group.letter}`:"Pré-jogo geral"},
-      {type:"good", section:`Manhã · Rodada ${newsRound}`, tag:"FAVORITO", title:`${flag(otherC)} ${otherC} tenta confirmar força`, text:`A seleção entra no dia com cobrança por protagonismo e controle da partida.`, meta:tightGroup?`Briga com ${tightGroup.first.team}`:"Rodada geral"},
-      {type:"bad", section:`Manhã · Rodada ${newsRound}`, tag:"ALERTA", title:`${flag(otherD)} ${otherD} teme tropeço`, text:`O clima antes da bola rolar é de cautela contra uma possível zebra.`, meta:`${newsPlayer(otherD,1)} sob cobrança`},
-      {type:"good", section:`Manhã · ${roundLabel}`, tag:"AMBIENTE", title:`${flag(team)} torcida empurra a seleção`, text:`O clima de jogo cresce e vira combustível para o elenco antes da partida.`, meta:nextLine},
+      {type:"good", section:`Manhã · ${roundLabel}`, tag:"PLANO DE JOGO", title:`${flag(team)} ${team} prepara pressão inicial contra ${opponent}`, text:`A comissão de ${TEAMS[team].coach} ensaia uma entrada forte para não deixar o jogo cair no ritmo do adversário.`, meta:nextLine},
+      {type:"good", section:`Manhã · ${roundLabel}`, tag:"PROTAGONISTA", title:`${flag(team)} ${key} vira referência no vestiário`, text:`O camisa de maior peso técnico aparece como ponto de apoio para acelerar jogadas e quebrar linhas.`, meta:pressureMeta},
+      {type:"good", section:`Manhã · ${roundLabel}`, tag:"AJUSTE FINO", title:`${flag(team)} ${secondKey} ganha liberdade no último treino`, text:`A preparação indica uma função mais solta para atacar o espaço entre meio-campo e defesa rival.`, meta:homeAway},
+      {type:comfortable?"good":"bad", section:`Manhã · ${roundLabel}`, tag:comfortable?"CONTROLE":"PRESSÃO", title:comfortable?`${flag(team)} ${team} tenta administrar vantagem no grupo`:`${flag(team)} ${team} joga com margem curta`, text:comfortable?`A campanha permite um plano mais paciente, mas a comissão evita falar em classificação antecipada.`:`O ambiente é de atenção total: qualquer tropeço pode bagunçar a tabela da seleção.`, meta:pressureMeta},
+      {type:"bad", section:`Manhã · ${roundLabel}`, tag:"DÚVIDA FÍSICA", title:`${flag(team)} ${newsPlayer(team,2)} fica sob observação`, text:`O jogador participa da preparação, mas a intensidade do aquecimento virou pauta entre comissão e imprensa.`, meta:"Decisão perto da bola rolar"},
+      {type:needsResult?"bad":"good", section:`Manhã · ${roundLabel}`, tag:needsResult?"JOGO-CHAVE":"CONFIANÇA", title:needsResult?`${flag(team)} ${team} trata partida como virada de chave`:`${flag(team)} elenco vê jogo como chance de crescer`, text:needsResult?`A pontuação força uma resposta imediata, e o plano passa por reduzir riscos nos primeiros minutos.`:`A leitura interna é que uma vitória pode mudar o peso emocional da campanha.`, meta:nextLine},
+      {type:"bad", section:`Manhã · ${roundLabel}`, tag:"ADVERSÁRIO", title:`${flag(opponent)} ${newsPlayer(opponent,0)} concentra atenção defensiva`, text:`O rival tem um nome monitorado de perto e pode puxar marcações para abrir espaço no último terço.`, meta:`Olho em ${opponent}`},
+      {type:"good", section:`Manhã · Rodada ${newsRound}`, tag:"TERMÔMETRO", title:`${flag(otherA)} ${otherA} chega com bastidor positivo`, text:`Em outro grupo, a seleção aparece entre as mais confiantes do dia e tenta transformar favoritismo em placar.`, meta:groupLeaders[0]?`Grupo ${groupLeaders[0].group.letter}`:"Central da Copa"},
+      {type:"bad", section:`Manhã · Rodada ${newsRound}`, tag:"ALERTA MÉDICO", title:`${flag(otherB)} ${newsPlayer(otherB,0)} vira preocupação antes da rodada`, text:`A escalação ainda não é tratada como problema fechado, mas a notícia muda o tom da preparação.`, meta:groupLeaders[1]?`Grupo ${groupLeaders[1].group.letter}`:"Pré-jogo geral"},
+      {type:"good", section:`Manhã · Rodada ${newsRound}`, tag:"BRIGA ABERTA", title:`${flag(otherC)} ${otherC} mira topo em grupo apertado`, text:`A rodada pode redesenhar a liderança e transformar confronto paralelo em notícia central do dia.`, meta:tightGroup?`${tightGroup.first.team} na cola`:"Rodada geral"},
+      {type:"bad", section:`Manhã · Rodada ${newsRound}`, tag:"RISCO DE ZEBRA", title:`${flag(otherD)} ${otherD} entra sob aviso contra tropeço`, text:`A comissão evita clima de oba-oba e cobra concentração para não perder pontos em jogo teoricamente controlável.`, meta:`${newsPlayer(otherD,1)} cobrado`},
+      {type:"good", section:`Manhã · ${roundLabel}`, tag:"ARQUIBANCADA", title:`${flag(team)} torcida cria clima de decisão`, text:`A movimentação em torno do estádio dá ao jogo cara de mata-mata, mesmo antes da bola rolar.`, meta:matchScheduleLine(prepMatch || {})},
+      {type:"bad", section:`Manhã · ${roundLabel}`, tag:"BASTIDOR TÁTICO", title:`${flag(team)} ${TEAMS[team].shape} pode mudar durante o jogo`, text:`A formação inicial é mantida, mas a comissão prepara alternativas se o adversário bloquear os lados do campo.`, meta:`Técnico: ${TEAMS[team].coach}`},
+      {type:"good", section:`Manhã · Rodada ${newsRound}`, tag:"OLHO NO CRAQUE", title:`${flag(otherA)} ${newsPlayer(otherA,0)} promete movimentar a rodada`, text:`O jogador chega cercado de expectativa e pode influenciar diretamente a tabela do grupo.`, meta:groupLeaders[0]?`Líder do Grupo ${groupLeaders[0].group.letter}`:"Panorama"},
     ];
   }
   const playedRound = Math.max(1, Math.min(last?.round || currentRound || newsRound, 3));
@@ -338,17 +400,36 @@ function journeyNewsItems(ctx){
   const gm1=pickMatch(roundMatches,0), gm2=pickMatch(roundMatches,1), gm3=pickMatch(roundMatches,2), gm4=pickMatch(roundMatches,3);
   const lastWinner=getMatchWinnerTeam(last);
   const decisiveTeam=lastWinner || team;
+  const decisivePlayer=matchHeadlinePlayer(last, decisiveTeam);
+  const resultMood=matchResultMood(last);
+  const resultMeta = row ? `${row.pos}º no grupo · ${row.P} ponto(s), SG ${row.SG>0?"+":""}${row.SG}` : (last ? matchResultText(last) : "Pós-jogo");
+  const favoritePain = lost && row?.pos > 2;
+  const groupEliminated = row?.status==="Eliminado";
+  const knockoutEliminated = lost && last && !isGroupStage(last);
+  const eliminated = groupEliminated || knockoutEliminated;
+  const eliminationStageIdx = knockoutEliminated ? (KO_ORDER[last.stage] || 1) : 0;
+  const earlyElimination = groupEliminated || eliminationStageIdx < 3;
+  const eliminationTitle = earlyElimination
+    ? `${flag(team)} ${team} cai cedo e torcida explode em cobrança`
+    : `${flag(team)} ${team} se despede em noite triste`;
+  const eliminationText = earlyElimination
+    ? `${matchResultText(last)} confirma a eliminação e transforma o pós-jogo em crise: torcedores cobram explicações, escolhas de escalação e postura nos momentos decisivos.`
+    : `${matchResultText(last)} encerra a caminhada. A queda dói, mas o tom é menos de revolta e mais de frustração por uma campanha que chegou perto de virar história.`;
   return [
-    {type:won?"good":"bad", section:`Noite · ${last?.stage || roundLabel}`, tag:"RESULTADO", title:won?`${flag(team)} ${team} vence e respira na Copa`:`${flag(team)} ${team} sai pressionado do jogo`, text:last?`${matchResultText(last)} vira o assunto central da noite.`:"A rodada termina com clima de análise.", meta:row?`${row.P} ponto(s), SG ${row.SG>0?"+":""}${row.SG}`:"Pós-jogo"},
-    {type:"good", section:`Noite · ${last?.stage || roundLabel}`, tag:"DECISIVO", title:`${flag(decisiveTeam)} ${newsPlayer(decisiveTeam,0)} marca a noite`, text:`O jogador vira personagem da rodada depois do resultado mais recente.`, meta:last?matchResultText(last):"Pós-jogo"},
-    {type:lost?"bad":"good", section:`Noite · ${last?.stage || roundLabel}`, tag:"REPERCUSSÃO", title:lost?`${flag(team)} ${team} encara cobrança pesada`:`${flag(team)} ${team} ganha confiança no vestiário`, text:lost?`O pós-jogo tem tom de cobrança e revisão de plano.`:`O elenco deixa a noite com sensação de caminho possível.`, meta:nextLine},
-    {type:"bad", section:`Noite · ${last?.stage || roundLabel}`, tag:"VEXAME?", title:`${flag(team)} ${newsPlayer(team,1)} vira alvo de análise`, text:`A atuação individual entra no debate da noite e divide opiniões na comissão.`, meta:last?matchResultText(last):"Análise"},
-    {type:"good", section:`Noite · Rodada ${playedRound}`, tag:"TABELA DO DIA", title:`${flag(otherA)} ${otherA} fecha a noite em destaque`, text:`A tabela parcial dos grupos ganha novo desenho depois dos resultados do dia.`, meta:groupLeaders[0]?`Grupo ${groupLeaders[0].group.letter}`:"Tabela parcial"},
-    {type:"bad", section:`Noite · Rodada ${playedRound}`, tag:"ZEBRA", title:gm1?`${flag(getMatchWinnerTeam(gm1)||gm1.home)} ${getMatchWinnerTeam(gm1)||gm1.home} mexe com a rodada`:`${flag(otherB)} ${otherB} escapa de crise`, text:gm1?`${matchResultText(gm1)} entra no pacote de resultados paralelos.`:`A seleção deixa a noite sem tranquilidade total.`, meta:gm1?`Grupo ${gm1.group}`:"Pós-jogo geral"},
-    {type:"good", section:`Noite · Rodada ${playedRound}`, tag:"ARTILHEIRO", title:`${flag(otherB)} ${newsPlayer(otherB,0)} aparece nos holofotes`, text:`O nome ganha manchetes depois de uma rodada cheia de placares importantes.`, meta:gm2?matchResultText(gm2):"Rodada paralela"},
-    {type:"bad", section:`Noite · Rodada ${playedRound}`, tag:"TROPEÇO", title:gm3?`${flag(gm3.home)} ${gm3.home} vê resultado virar problema`:`${flag(otherC)} ${otherC} perde margem`, text:gm3?`${matchResultText(gm3)} aumenta a pressão por resposta imediata.`:`A seleção entra na próxima manhã com menos conforto.`, meta:gm3?`Grupo ${gm3.group}`:"Tabela"},
-    {type:"good", section:`Noite · Rodada ${playedRound}`, tag:"CLASSIFICAÇÃO", title:`${flag(otherC)} ${otherC} esquenta briga da chave`, text:`A noite termina com a seleção no centro dos cálculos de classificação.`, meta:tightGroup?`${tightGroup.first.team} e ${otherC}`:"Grupo aberto"},
-    {type:"bad", section:`Noite · Rodada ${playedRound}`, tag:"CRISE", title:gm4?`${flag(gm4.away)} ${gm4.away} fecha o dia sob suspeita`:`${flag(otherD)} ${otherD} vira assunto negativo`, text:gm4?`${matchResultText(gm4)} deixa perguntas para a próxima manhã.`:`A seleção precisa responder rápido para não perder força.`, meta:gm4?`Grupo ${gm4.group}`:`${newsPlayer(otherD,1)} cobrado`},
+    {type:won?"good":"bad", section:`Noite · ${last?.stage || roundLabel}`, tag:eliminated?"ELIMINAÇÃO":"RESULTADO", title:eliminated?eliminationTitle:won?`${flag(team)} ${team} vence e muda o tom da campanha`:`${flag(team)} ${team} tropeça e liga alerta`, text:eliminated?eliminationText:last?`${matchResultText(last)} foi tratado internamente como ${resultMood}. A leitura agora passa pela tabela e pelo desgaste do elenco.`:"A rodada termina com clima de análise.", meta:eliminated?(earlyElimination?"Pressão máxima":"Fim de campanha"):resultMeta},
+    {type:"good", section:`Noite · ${last?.stage || roundLabel}`, tag:"PERSONAGEM", title:`${flag(decisiveTeam)} ${decisivePlayer} ganha manchete da noite`, text:`O jogador sai do jogo como rosto mais citado da transmissão e vira tema da entrevista coletiva.`, meta:last?matchResultText(last):"Pós-jogo"},
+    {type:lost?"bad":"good", section:`Noite · ${last?.stage || roundLabel}`, tag:"VESTIÁRIO", title:lost?`${flag(team)} ${team}: vestiário cobra reação imediata`:`${flag(team)} ${team}: vestiário fala em passo importante`, text:lost?`A comissão evita caça às bruxas, mas a conversa pós-jogo aponta ajustes urgentes para a próxima manhã.`:`A vitória não vira festa exagerada: o grupo fala em recuperar energia e manter concentração.`, meta:nextLine},
+    {type:favoritePain?"bad":"good", section:`Noite · ${last?.stage || roundLabel}`, tag:favoritePain?"SITUAÇÃO DELICADA":"TABELA", title:favoritePain?`${flag(team)} ${team} fica fora da zona desejada`:`${flag(team)} ${team} ainda controla parte do próprio caminho`, text:favoritePain?`A pontuação coloca pressão real na sequência e torna os critérios de desempate assunto obrigatório.`:`A tabela não está resolvida, mas o cenário permite planejamento sem desespero.`, meta:resultMeta},
+    {type:"bad", section:`Noite · ${last?.stage || roundLabel}`, tag:"ANÁLISE", title:`${flag(team)} ${newsPlayer(team,1)} vira foco do debate tático`, text:`A atuação individual entra no centro da conversa porque mexeu com encaixes, pressão pós-perda e saída de bola.`, meta:last?matchResultText(last):"Mesa redonda"},
+    {type:"good", section:`Noite · ${last?.stage || roundLabel}`, tag:"BANCO DECISIVO", title:`${flag(decisiveTeam)} mudanças alteram ritmo no fim`, text:`As substituições foram lidas como tentativa de controlar energia e ganhar duelos nos minutos finais.`, meta:last?.substitutions?.length?`${last.substitutions.length} troca(s) no jogo`:"Gestão de elenco"},
+    {type:"good", section:`Noite · Rodada ${playedRound}`, tag:"TABELA DO DIA", title:`${flag(otherA)} ${otherA} fecha a noite em alta`, text:`A combinação de resultados melhora o ambiente e coloca a seleção entre os assuntos fortes da rodada.`, meta:groupLeaders[0]?`Grupo ${groupLeaders[0].group.letter}`:"Tabela parcial"},
+    {type:"bad", section:`Noite · Rodada ${playedRound}`, tag:"ZEBRA", title:gm1?`${flag(getMatchWinnerTeam(gm1)||gm1.home)} ${getMatchWinnerTeam(gm1)||gm1.home} bagunça projeções`:`${flag(otherB)} ${otherB} escapa de crise por pouco`, text:gm1?`${matchResultText(gm1)} entra no pacote de resultados que muda leitura de força da rodada.`:`A seleção deixa a noite sem tranquilidade total.`, meta:gm1?`Grupo ${gm1.group} · ${matchResultMood(gm1)}`:"Pós-jogo geral"},
+    {type:"good", section:`Noite · Rodada ${playedRound}`, tag:"NOME DA RODADA", title:`${flag(otherB)} ${matchHeadlinePlayer(gm2, otherB)} aparece nos holofotes`, text:`O nome ganha manchetes depois de influenciar uma rodada cheia de jogos paralelos importantes.`, meta:gm2?matchResultText(gm2):"Rodada paralela"},
+    {type:"bad", section:`Noite · Rodada ${playedRound}`, tag:"TROPEÇO", title:gm3?`${flag(gm3.home)} ${gm3.home} vê resultado virar problema`:`${flag(otherC)} ${otherC} perde margem`, text:gm3?`${matchResultText(gm3)} aumenta a pressão por resposta imediata e muda o peso da próxima partida.`:`A seleção entra na próxima manhã com menos conforto.`, meta:gm3?`Grupo ${gm3.group} · ${matchResultMood(gm3)}`:"Tabela"},
+    {type:"good", section:`Noite · Rodada ${playedRound}`, tag:"CLASSIFICAÇÃO", title:`${flag(otherC)} ${otherC} esquenta briga da chave`, text:`A noite termina com a seleção no centro dos cálculos, especialmente pelos critérios de saldo e gols marcados.`, meta:tightGroup?`${tightGroup.first.team} e ${otherC}`:"Grupo aberto"},
+    {type:"bad", section:`Noite · Rodada ${playedRound}`, tag:"CRISE", title:gm4?`${flag(gm4.away)} ${gm4.away} fecha o dia sob suspeita`:`${flag(otherD)} ${otherD} vira assunto negativo`, text:gm4?`${matchResultText(gm4)} deixa perguntas sobre postura, banco e capacidade de reação.`:`A seleção precisa responder rápido para não perder força.`, meta:gm4?`Grupo ${gm4.group}`:`${newsPlayer(otherD,1)} cobrado`},
+    {type:"good", section:`Noite · ${last?.stage || roundLabel}`, tag:"LEITURA TÁTICA", title:`${flag(team)} plano de ${TEAMS[team].coach} ganha nova interpretação`, text:`O resultado reforça que a campanha será decidida tanto por nomes fortes quanto pela gestão dos momentos de pressão.`, meta:`Esquema-base ${TEAMS[team].shape}`},
+    {type:"bad", section:`Noite · ${last?.stage || roundLabel}`, tag:"DESGASTE", title:`${flag(team)} sequência liga alerta físico`, text:`A comissão já monitora recuperação, minutos jogados e possíveis mudanças para evitar queda de intensidade.`, meta:"Recuperação até a próxima manhã"},
   ];
 }
 function renderJourneyNews(ctx){
@@ -375,6 +456,9 @@ function renderJourneyNews(ctx){
         </article>`).join("")}
       </div>
     </div>
+    <div class="journey-news-progress mt-3" aria-hidden="true">
+      <div id="journeyNewsProgress" class="journey-news-progress-fill"></div>
+    </div>
     <div class="mt-3 flex items-center justify-between gap-3">
       <div class="flex gap-1.5" id="journeyNewsDots">
         ${items.map((_,i)=>`<span class="journey-news-dot ${i===0?'is-active':''}" data-news-dot="${i}"></span>`).join("")}
@@ -388,15 +472,42 @@ function wireJourneyNewsCarousel(){
   if(!cards.length) return;
   const dots=[...document.querySelectorAll(".journey-news-dot")];
   const count=$("#journeyNewsCount");
+  const windowEl=$("#journeyNewsWindow");
+  const progress=$("#journeyNewsProgress");
+  const duration=6000;
   let active=0;
-  const show=i=>{
+  let elapsed=0;
+  let lastTick=Date.now();
+  let paused=false;
+  const paintProgress=()=>{
+    if(progress) progress.style.width = `${Math.min(100, (elapsed / duration) * 100)}%`;
+  };
+  const show=(i, resetProgress=true)=>{
     active=(i+cards.length)%cards.length;
     cards.forEach((card,idx)=>card.classList.toggle("is-active", idx===active));
     dots.forEach((dot,idx)=>dot.classList.toggle("is-active", idx===active));
     if(count) count.textContent=String(active+1);
+    if(resetProgress){
+      elapsed=0;
+      lastTick=Date.now();
+      paintProgress();
+    }
   };
   dots.forEach(dot=>dot.onclick=()=>show(Number(dot.dataset.newsDot)));
-  journeyNewsTimer=setInterval(()=>show(active+1),6000);
+  if(windowEl){
+    windowEl.addEventListener("mouseenter",()=>{ paused=true; windowEl.classList.add("is-paused"); });
+    windowEl.addEventListener("mouseleave",()=>{ paused=false; lastTick=Date.now(); windowEl.classList.remove("is-paused"); });
+  }
+  paintProgress();
+  journeyNewsTimer=setInterval(()=>{
+    const now=Date.now();
+    if(!paused){
+      elapsed += now - lastTick;
+      if(elapsed >= duration) show(active+1);
+      else paintProgress();
+    }
+    lastTick=now;
+  }, 80);
 }
 function renderJourneySituation(ctx){
   const {team, revealed, dayPhase, nextMatch, partialGroup, groupMatches, revealedMatches}=ctx;
@@ -418,9 +529,10 @@ function renderJourneySituation(ctx){
           <div class="rounded-xl bg-slate-100 px-2 py-1 text-xs font-black text-slate-400">VS</div>
           <div class="font-extrabold">${flag(nextMatch.away)} ${nextMatch.away}</div>
         </div>
-        <div class="mt-3 text-sm font-semibold text-slate-500">${nextMatch.city} · ${nextMatch.venue}</div>
+        <div class="mt-3 text-sm font-semibold text-slate-500">${matchScheduleLine(nextMatch)}</div>
       </div>
       ${partialGroup?`<div class="mt-3">${compactGroupCard(partialGroup, team)}</div>`:""}
+      ${daySnapshotButtons()}
     </div>`;
   }
   if(inGroups && partialGroup){
@@ -434,6 +546,7 @@ function renderJourneySituation(ctx){
       </div>
       ${compactGroupCard(partialGroup, team)}
       <p class="mt-3 text-xs font-semibold text-slate-500">${dayPhase==="night"?"Resultados do dia já entraram na classificação parcial.":"A tabela acompanha apenas o que já foi revelado na jornada."}</p>
+      ${daySnapshotButtons()}
     </div>`;
   }
   const koMatches=revealedMatches.filter(m=>!isGroupStage(m));
@@ -455,6 +568,7 @@ function renderJourneySituation(ctx){
         <div class="mt-1 font-extrabold text-sm leading-tight">${flag(nextMatch.home)} ${nextMatch.home} <span class="px-1.5 text-slate-400">x</span> ${flag(nextMatch.away)} ${nextMatch.away}</div>
       </div>`:""}
     </div>
+    ${daySnapshotButtons()}
   </div>`;
 }
 
@@ -464,13 +578,13 @@ function setGuidedVisibility(showGuided){
   $("#top").classList.toggle("hidden", showGuided);
   $("#siteFooter").classList.toggle("hidden", showGuided);
 }
-function renderGuided(html){
+function renderGuided(html, shellTone=""){
   if(journeyNewsTimer){
     clearInterval(journeyNewsTimer);
     journeyNewsTimer = null;
   }
   setGuidedVisibility(true);
-  $("#guidedExperience").innerHTML = `<section class="guided-shell">${html}</section>`;
+  $("#guidedExperience").innerHTML = `<section class="guided-shell ${shellTone}"><div class="guided-celestial" aria-hidden="true"></div>${html}</section>`;
   paintIcons();
 }
 function renderTeamPickerIntro(){
@@ -631,9 +745,9 @@ function renderFavoriteTeamJourney(){
         </div>
         ${progressiveCampaign(record)}
       </div>
-    </div>`);
+    </div>`, dayPhase==="night" ? "guided-night" : "guided-day");
   wireJourneyMatchButtons();
-  document.querySelectorAll(".snap-btn").forEach(b=> b.onclick=()=>openSnapshot(b.dataset.snap, Number(b.dataset.idx)));
+  document.querySelectorAll(".day-snap-btn").forEach(b=> b.onclick=()=>openDaySnapshot(b.dataset.snap));
   document.querySelectorAll(".replay-btn").forEach(b=> b.onclick=()=>{ const i=Number(b.dataset.idx); if(matches[i]) openMatchSimulator(matches[i], i); });
   document.querySelectorAll(".switch-sim").forEach(b=> b.onclick=()=>{ setActiveSimulation(b.dataset.id); renderApp(); });
   document.querySelectorAll(".del-sim").forEach(b=> b.onclick=()=>{ if(confirm("Excluir esta simulação?")){ deleteSimulation(b.dataset.id); renderApp(); } });

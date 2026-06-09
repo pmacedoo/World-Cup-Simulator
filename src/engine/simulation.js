@@ -3,6 +3,8 @@
 // Carregado após worldcup-data.js (que define window.WC_DATA).
 
 const { TEAMS, GROUPS, THIRD_PLACE_MAP } = window.WC_DATA;
+const CALENDAR = window.WC_CALENDAR || null;
+const LINEUPS = window.WC_LINEUPS || null;
 
 /* =================================================================
    MOTOR DE SIMULAÇÃO
@@ -95,7 +97,7 @@ function buildShootout(homeName, awayName, winnerHome, seed){
 }
 
 // simula uma partida (chaos controla a variância/zebras)
-function playMatch(homeName, awayName, stage, chaos, knockout=false, vIndex=0){
+function playMatch(homeName, awayName, stage, chaos, knockout=false, vIndex=0, calendarEntry=null){
   const A = teamObj(homeName), B = teamObj(awayName);
   const base = 1.1;
   const diff = (A.ovr - B.ovr);
@@ -132,13 +134,16 @@ function playMatch(homeName, awayName, stage, chaos, knockout=false, vIndex=0){
   ].sort((x,y)=> x.minute - y.minute);
 
   const v = VENUES[vIndex % VENUES.length];
-  return {
+  const match = {
     stage, home:homeName, away:awayName, ga, gb, aet, pens, penalties,
     score:`${ga}-${gb}`,
     venue:v[0], city:v[1],
     goals: finalGoals,
     ovrA:A.ovr, ovrB:B.ovr,
   };
+  if(CALENDAR) CALENDAR.apply(match, calendarEntry);
+  if(LINEUPS) LINEUPS.attachMatchPersonnel(match);
+  return match;
 }
 
 // round-robin de 4 times
@@ -147,13 +152,23 @@ const RR = [ [[0,1],[2,3]], [[0,2],[3,1]], [[0,3],[1,2]] ];
 function simulateGroup(letter, teams, chaos, vStart){
   const matches=[];
   let vi=vStart;
-  RR.forEach((round, ri)=>{
-    round.forEach(([h,a])=>{
-      const m = playMatch(teams[h], teams[a], `Grupo ${letter} · Rodada ${ri+1}`, chaos, false, vi++);
-      m.round = ri+1; m.group = letter;
+  const fixtures = CALENDAR?.groupByLetter?.[letter];
+  if(fixtures?.length){
+    fixtures.forEach(fixture=>{
+      const m = playMatch(fixture.home, fixture.away, `Grupo ${letter} · Rodada ${fixture.round}`, chaos, false, vi++, fixture);
+      m.round = fixture.round; m.group = letter;
       matches.push(m);
     });
-  });
+  } else {
+    RR.forEach((round, ri)=>{
+      round.forEach(([h,a])=>{
+        const fixture = CALENDAR?.groupFixture?.(letter, teams[h], teams[a]);
+        const m = playMatch(teams[h], teams[a], `Grupo ${letter} · Rodada ${ri+1}`, chaos, false, vi++, fixture);
+        m.round = ri+1; m.group = letter;
+        matches.push(m);
+      });
+    });
+  }
   // tabela
   const st = {};
   teams.forEach(t=> st[t]={team:t, P:0,J:0,V:0,E:0,D:0,GP:0,GC:0,FP:0});
@@ -240,7 +255,7 @@ function simulate(seed, chaos, name, tone){
   let vi = 80;
   const byMatch = {};
   function playKnockMatch(id, A, B, label, stageIdx){
-    const m = playMatch(A.team, B.team, label, chaos, true, vi++);
+    const m = playMatch(A.team, B.team, label, chaos, true, vi++, CALENDAR?.knockoutFixture?.(id));
     m.matchNo = id; m.A=A; m.B=B; m.stageIdx=stageIdx;
     m.topSeedRule = topSeedRuleFor(A.team, B.team, stageIdx, protectedTopSeedTeams);
     const aWin = (m.ga>m.gb) || (m.pens && m.pens[0]>m.pens[1]);
@@ -268,7 +283,7 @@ function simulate(seed, chaos, name, tone){
     [87, winner("K"), thirdForWinner("K")],
     [88, runner("D"), runner("G")],
   ];
-  const R32 = {matches:R32_SPECS.map(([id,A,B])=>playKnockMatch(id,A,B,"Fase de 32",1))};
+  const R32 = {matches:R32_SPECS.map(([id,A,B])=>playKnockMatch(id,A,B,"16-avos",1))};
 
   function playFromMatches(specs, label, stageIdx){
     return {matches:specs.map(([id,a,b])=>playKnockMatch(id, byMatch[a].winner, byMatch[b].winner, label, stageIdx))};
@@ -279,13 +294,13 @@ function simulate(seed, chaos, name, tone){
   const SF  = playFromMatches([[101,97,98],[102,99,100]], "Semifinal", 4);
   // 3º lugar
   const tpA = SF.matches[0].loser, tpB = SF.matches[1].loser;
-  const third = playMatch(tpA.team, tpB.team, "Disputa de 3º lugar", chaos, true, vi++);
+  const third = playMatch(tpA.team, tpB.team, "Disputa de 3º lugar", chaos, true, vi++, CALENDAR?.knockoutFixture?.(103));
   third.matchNo=103; third.A=tpA; third.B=tpB; third.stageIdx=4;
   const thirdWin = (third.ga>third.gb)||(third.pens&&third.pens[0]>third.pens[1]);
   third.winner = thirdWin? tpA: tpB; third.loser = thirdWin? tpB: tpA;
   // final
   const fA = SF.matches[0].winner, fB = SF.matches[1].winner;
-  const final = playMatch(fA.team, fB.team, "Final", chaos, true, 4); // MetLife
+  const final = playMatch(fA.team, fB.team, "Final", chaos, true, 4, CALENDAR?.knockoutFixture?.(104)); // MetLife
   final.matchNo=104; final.A=fA; final.B=fB; final.stageIdx=5;
   final.topSeedRule = topSeedRuleFor(fA.team, fB.team, 5, protectedTopSeedTeams);
   final.venue="MetLife Stadium"; final.city="Nova York / Nova Jersey";
@@ -373,7 +388,7 @@ function simulate(seed, chaos, name, tone){
     const wO=TEAMS[m.winner.team].ovr, lO=TEAMS[m.loser.team].ovr;
     const diff = lO-wO;
     if(diff>=4){
-      const stageW = {"Fase de 32":1,"Oitavas de final":2,"Quartas de final":3,"Semifinal":4,"Final":5}[m.stage]||1;
+      const stageW = {"16-avos":1,"Fase de 32":1,"Oitavas de final":2,"Quartas de final":3,"Semifinal":4,"Final":5}[m.stage]||1;
       const sc = diff*3 + stageW;
       if(sc>upScore){ upScore=sc; biggestUpset={m, diff}; }
     }
@@ -391,7 +406,7 @@ function simulate(seed, chaos, name, tone){
   // jogo mais emocionante: muitos gols + fase avançada + virada/pênaltis
   let bestMatch=null, bmScore=-1;
   allMatches.forEach(m=>{
-    const stageW = m.stage.includes("Final")?6:m.stage.includes("Semi")?5:m.stage.includes("Quartas")?4:m.stage.includes("Oitavas")?3:m.stage.includes("32")?2:1;
+    const stageW = m.stage.includes("Final")?6:m.stage.includes("Semi")?5:m.stage.includes("Quartas")?4:m.stage.includes("Oitavas")?3:m.stage.includes("16-avos")||m.stage.includes("32")?2:1;
     const sc = (m.ga+m.gb)*1.0 + stageW + (m.pens?3:0) + (m.aet?1.5:0);
     if(sc>bmScore){ bmScore=sc; bestMatch=m; }
   });

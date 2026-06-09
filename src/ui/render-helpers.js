@@ -61,6 +61,10 @@ function rowDot(pos, qualified){
   if(pos===3 && qualified) return "bg-gold-500";
   return "bg-slate-300";
 }
+function matchScheduleLine(m){
+  const place = [m.city, m.venue].filter(Boolean).join(" · ");
+  return [m.kickoff, place].filter(Boolean).join(" · ");
+}
 // "grande zebra positiva": prioriza o azarão que foi mais longe (cinderela);
 // se ele protagonizou a maior zebra, cita a vítima.
 function zebraTeam(s){

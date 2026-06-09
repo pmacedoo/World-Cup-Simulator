@@ -76,7 +76,7 @@ window.addEventListener("load", ()=> setTimeout(()=>document.querySelectorAll(".
 
 /* ---- scroll spy for nav ---- */
 function setupScrollSpy(){
-  const ids=["minha","overview","grupos","jogos","terceiros","mata","roteiro","stats"];
+  const ids=["overview","minha","mata","grupos","terceiros","jogos","stats","roteiro"];
   const links=[...document.querySelectorAll(".nav-link")];
   const obs=new IntersectionObserver((es)=>{
     es.forEach(e=>{ if(e.isIntersecting){ links.forEach(l=>l.classList.toggle("active", l.getAttribute("href")==="#"+e.target.id)); } });

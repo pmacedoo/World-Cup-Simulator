@@ -89,7 +89,7 @@ function matchCard(m){
   const aWin=m.ga>m.gb, bWin=m.gb>m.ga;
   return `<div class="glass rounded-2xl p-4 shadow-glass">
     <div class="flex items-center justify-between text-[11px] text-slate-400 font-bold uppercase tracking-wider mb-2">
-      <span>${m.matchNo?`M${m.matchNo} · `:''}${m.stage}</span><span class="font-semibold normal-case tracking-normal">${m.city} · ${m.venue}</span>
+      <span>${m.matchNo?`M${m.matchNo} · `:''}${m.stage}</span><span class="font-semibold normal-case tracking-normal">${matchScheduleLine(m)}</span>
     </div>
     <div class="flex items-center justify-center gap-3 sm:gap-5">
       <div class="flex-1 text-right font-display font-extrabold text-base sm:text-lg ${aWin?'':'text-slate-400'}">${m.home} ${flag(m.home)}</div>

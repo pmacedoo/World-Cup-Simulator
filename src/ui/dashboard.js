@@ -52,16 +52,12 @@ function renderOverview(){
   const s=currentSim();
   $("#ovTone").textContent = (()=>{ const r=activeRecord(); return r?`${r.favoriteTeam} · Simulação ${profileFor(r.type).label} · ${profileFor(r.type).sub}`:(state.meta[state.active]?.sub||""); })();
   const a=s.awards, h=s.highlights;
-  const z=zebraTeam(s);
   const cards=[
-    ["trophy","text-gold-600","Campeão",`${flag(s.champion)} ${s.champion}`,`Técnico: ${TEAMS[s.champion].coach}`,"border-gold-500/40"],
     ["medal","text-slate-400","Vice-campeão",`${flag(s.runnerUp)} ${s.runnerUp}`,"Caiu na final","border-slate-300"],
     ["award","text-amber-700","Terceiro lugar",`${flag(s.thirdPlace)} ${s.thirdPlace}`,`4º: ${flag(s.fourthPlace)} ${s.fourthPlace}`,"border-amber-700/30"],
     ["star","text-usablue","Melhor jogador",`${a.bestPlayer.player}`,`${flag(a.bestPlayer.team)} ${a.bestPlayer.team} · ${a.bestPlayer.goals} gols`,"border-usablue/30"],
-    ["crosshair","text-usared","Artilheiro",`${a.topScorer.player}`,`${flag(a.topScorer.team)} ${a.topScorer.team} · ${a.topScorer.goals} gols`,"border-usared/30"],
     ["sparkles","text-mxgreen","Melhor jovem",`${a.bestYoung.player}`,`${flag(a.bestYoung.team)} ${a.bestYoung.team}`,"border-mxgreen/30"],
     ["hand","text-slate-500","Melhor goleiro",`${a.bestGK?a.bestGK.player:'—'}`,`${a.bestGK?flag(a.bestGK.team)+' '+a.bestGK.team+' · '+a.bestGK.conceded+' sofridos':''}`,"border-slate-300"],
-    ["zap","text-emerald-500","Grande zebra positiva",`${flag(z.team)} ${z.team}`, z.sub,"border-emerald-400/40"],
     ["heart-crack","text-slate-400","Grande decepção",`${flag(h.disappointment)} ${h.disappointment}`,"Abaixo do esperado","border-slate-300"],
   ];
   const wrap=$("#overviewGrid"); wrap.innerHTML="";
@@ -77,14 +73,14 @@ function renderOverview(){
   wrap.appendChild(el("div","reveal glass card-hover rounded-3xl p-5 shadow-glass border border-usablue/30 sm:col-span-2 lg:col-span-3 bg-gradient-to-br from-usablue/5 to-usared/5",
     `<div class="flex items-center gap-2 text-slate-500 text-[11px] font-bold uppercase tracking-wider">${ic('flame','w-4 h-4 text-usared')}Jogo mais emocionante · ${bm.stage}</div>
      <div class="font-display font-extrabold text-xl mt-2 flex items-center gap-2 flex-wrap">${flag(bm.home)} ${bm.home} <span class="px-2">${scoreLine(bm)}</span> ${bm.away} ${flag(bm.away)}</div>
-     <div class="text-sm text-slate-500 mt-1">${bm.city} · ${bm.venue} · ${bm.ga+bm.gb} gols${bm.pens?' · decidido nos pênaltis':bm.aet?' · na prorrogação':''}</div>`));
+     <div class="text-sm text-slate-500 mt-1">${matchScheduleLine(bm)} · ${bm.ga+bm.gb} gols${bm.pens?' · decidido nos pênaltis':bm.aet?' · na prorrogação':''}</div>`));
 
   // podium / final banner
   const f=s.knockout.final;
   $("#podium").innerHTML =
     `<div class="reveal glass champ-glow rounded-3xl p-6 sm:p-8 shadow-lift overflow-hidden relative bg-gradient-to-br from-gold-400/15 via-white/40 to-gold-500/10">
        <div class="absolute -right-8 -top-8 opacity-[0.07] select-none">${ic('trophy','w-40 h-40 text-gold-600')}</div>
-       <div class="text-xs font-bold uppercase tracking-[.2em] text-gold-600">A Grande Final · ${f.city}</div>
+       <div class="text-xs font-bold uppercase tracking-[.2em] text-gold-600">A Grande Final · ${f.kickoff || f.city}</div>
        <div class="mt-3 flex flex-wrap items-center gap-x-6 gap-y-3">
          <div class="text-3xl sm:text-5xl font-display font-extrabold flex items-center gap-3">${flag(f.home,'flag-lg')} ${f.home}</div>
          <div class="trophy-shine text-3xl sm:text-5xl font-display font-extrabold tnum">${scoreLine(f)}</div>
