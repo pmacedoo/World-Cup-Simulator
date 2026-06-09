@@ -44,8 +44,9 @@ function loadSims(){
     .map(r=>{
       const revealed=Math.max(0,r.revealed|0);
       const dayPhase = r.dayPhase==="night" || (!r.dayPhase && revealed>0) ? "night" : "morning";
+      const tactics = (r.tactics && typeof r.tactics==="object") ? r.tactics : {};
       return { id:r.id||uid(), favoriteTeam:r.favoriteTeam, type:r.type, seed:(r.seed>>>0)||1,
-        createdAt:r.createdAt||Date.now(), revealed,
+        createdAt:r.createdAt||Date.now(), revealed, tactics,
         finished:!!r.finished, dashboardUnlocked:!!r.dashboardUnlocked, dayPhase };
     });
   const act=safeStorageGet(SIM_ACTIVE_KEY);
@@ -56,7 +57,11 @@ function simObjFor(record){
   if(!record) return null;
   if(simCache.has(record.id)) return simCache.get(record.id);
   const p=profileFor(record.type);
-  const obj=tagSimulation(simulateWithRankingProtection(record.seed, p.chaos, profileNameFor(record), p.label), record.type);
+  // MODO TÉCNICO: as táticas escolhidas pelo usuário (por jogo da favorita)
+  // entram como simOptions. managerSeed = seed pedido (fixo) garante que os
+  // jogos já jogados não mudem ao definir a tática de um jogo futuro.
+  const simOptions={ favoriteTeam:record.favoriteTeam, tactics:record.tactics||{}, managerSeed:record.seed };
+  const obj=tagSimulation(simulateWithRankingProtection(record.seed, p.chaos, profileNameFor(record), p.label, simOptions), record.type);
   obj.__recordId=record.id;
   simCache.set(record.id, obj);
   return obj;
@@ -65,9 +70,19 @@ function activeRecord(){ return appState.sims.find(r=>r.id===appState.activeId) 
 function currentSim(){ return simObjFor(activeRecord()); }
 function createSimulation(team, type){
   const rec={ id:uid(), favoriteTeam:team, type, seed:((Date.now()^(Math.random()*1e9))>>>0)||1,
-    createdAt:Date.now(), revealed:0, finished:false, dashboardUnlocked:false, dayPhase:"morning" };
+    createdAt:Date.now(), revealed:0, tactics:{}, finished:false, dashboardUnlocked:false, dayPhase:"morning" };
   appState.sims.push(rec); appState.activeId=rec.id; persistSims();
   return rec;
+}
+// Define/atualiza a tática do jogo `journeyIndex` da favorita e invalida o cache
+// da simulação para que o motor recompute com a nova escolha. Só permitido para
+// um jogo ainda NÃO revelado (não reescreve o passado).
+function setMatchTactic(record, journeyIndex, tactic){
+  if(!record || journeyIndex<record.revealed) return;
+  record.tactics = record.tactics || {};
+  record.tactics[journeyIndex] = tactic;
+  simCache.delete(record.id);
+  persistSims();
 }
 function deleteSimulation(id){
   appState.sims = appState.sims.filter(r=>r.id!==id);

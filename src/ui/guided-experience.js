@@ -754,7 +754,7 @@ function renderFavoriteTeamJourney(){
   if($("#newSimFromJourney")) $("#newSimFromJourney").onclick=startNewSimulation;
   if($("#campaignDashboard")) $("#campaignDashboard").onclick=openFullDashboard;
   wireJourneyNewsCarousel();
-  if($("#startJourney")) $("#startJourney").onclick=()=>{ if(matches[revealed] && !finished) openMatchSimulator(matches[revealed], revealed); };
+  if($("#startJourney")) $("#startJourney").onclick=()=>{ if(matches[revealed] && !finished) openTacticPlanner(matches[revealed], revealed); };
   if($("#advanceMorning")) $("#advanceMorning").onclick=advanceToNextMorning;
   if($("#askDashboard")) $("#askDashboard").onclick=()=>{ if(finished) renderDashboardConfirmation(); };
   $("#journeyTypeBack").onclick=changeSimulationType;
@@ -797,7 +797,7 @@ function wireJourneyMatchButtons(){
     btn.onclick=()=>{
       const matches=getTeamMatches(currentSim(), getFavoriteTeam());
       const idx=Number(btn.dataset.matchIndex||0);
-      if(matches[idx]) openMatchSimulator(matches[idx], idx);
+      if(matches[idx]) openTacticPlanner(matches[idx], idx);
     };
   });
 }
