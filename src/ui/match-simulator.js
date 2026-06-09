@@ -181,7 +181,10 @@ function skipMatchSimulation(match){
   }
 
   const item=appState.currentSimulatedMatch;
-  if(item && item.match===match) markMatchRevealed(activeRecord(), item.journeyIndex);
+  if(item && item.match===match){
+    markCalendarMatchWatched(activeRecord(), match);
+    markMatchRevealed(activeRecord(), item.journeyIndex);
+  }
 
   if(match.penalties){
     if(infoGrid) infoGrid.classList.remove("hidden");

@@ -28,6 +28,8 @@ const appState = {
   penaltyTimers: [],
   matchAnimationStarted: false,
   darkMode: false,     // preferência de modo escuro (persistida em localStorage)
+  autoAdvancing: false,
+  autoAdvanceTimer: null,
 };
 const uid = () => "s" + Date.now().toString(36) + Math.random().toString(36).slice(2,7);
 function timeAgo(ts){

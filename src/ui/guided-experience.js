@@ -542,7 +542,7 @@ function renderCalendarDayCard(ctx, type){
       <div class="flex items-center justify-between gap-3">
         <div>
           <div class="text-[10px] uppercase tracking-widest font-extrabold text-slate-400">Relógio da jornada</div>
-          <div class="font-display font-extrabold text-3xl tnum">${formatJourneyMinute(journeyMinute)}</div>
+          <div id="journeyClock" class="font-display font-extrabold text-3xl tnum">${formatJourneyMinute(journeyMinute)}</div>
         </div>
         <div class="text-right text-xs font-extrabold text-slate-500">
           ${advance?`Avançou de ${formatJourneyMinute(advance.from)} para ${formatJourneyMinute(advance.to%1440)}`:`Próximo corte: ${advanceLabel.replace("Avançar até ","")}`}
@@ -571,7 +571,12 @@ function renderCalendarDayCard(ctx, type){
         ? `<button id="askDashboard" class="btn-premium text-white font-extrabold rounded-2xl px-5 py-3.5">${ic('layout-dashboard','w-4 h-4')} Ver Copa completa</button>`
         : ctx.canPlayFavoriteToday
             ? `<button class="glass rounded-2xl px-5 py-3.5 font-extrabold text-slate-500 opacity-70 cursor-not-allowed">${ic('flag','w-4 h-4')} Jogue sua partida para encerrar o dia</button>`
-            : `<button id="advanceJourneyClock" class="btn-premium text-white font-extrabold rounded-2xl px-5 py-3.5">${ic('fast-forward','w-4 h-4')} ${advanceLabel}</button>`}
+            : appState.autoAdvancing
+                ? `<button id="pauseAutoAdvance" class="glass rounded-2xl px-5 py-3.5 font-extrabold text-slate-600 flex items-center justify-center gap-2">${ic('pause','w-4 h-4')} Pausar avanço</button>`
+                : `<div class="grid grid-cols-[1fr_auto] gap-2">
+                     <button id="advanceJourneyClock" class="btn-premium text-white font-extrabold rounded-2xl px-5 py-3.5">${ic('fast-forward','w-4 h-4')} ${advanceLabel}</button>
+                     <button id="autoAdvanceClock" class="glass rounded-2xl px-4 py-3.5 font-extrabold text-slate-600 flex items-center gap-1.5" title="Avançar automaticamente pela Copa">${ic('play-circle','w-4 h-4')} Automático</button>
+                   </div>`}
     </div>
     ${savedSimsPanel()}
     <button id="resetGuidedSmall" class="mt-3 text-xs font-extrabold text-slate-400 hover:text-usared">Reiniciar progresso desta simulação</button>
@@ -1081,6 +1086,135 @@ function renderSimulationTypePicker(){
   });
   $("#backToTeams").onclick=startNewSimulation;
 }
+
+// ============================================================
+// AUTO-ADVANCE
+// ============================================================
+let _autoRafId = null;
+
+function startAutoAdvance(){
+  if(appState.autoAdvancing) return;
+  appState.autoAdvancing = true;
+  renderFavoriteTeamJourney();
+  setTimeout(runAutoAdvance, 80);
+}
+
+function pauseAutoAdvance(){
+  appState.autoAdvancing = false;
+  if(_autoRafId){ cancelAnimationFrame(_autoRafId); _autoRafId = null; }
+  if(appState.autoAdvanceTimer){ clearTimeout(appState.autoAdvanceTimer); appState.autoAdvanceTimer = null; }
+  document.querySelector(".auto-advance-banner")?.remove();
+  renderFavoriteTeamJourney();
+}
+
+function runAutoAdvance(){
+  if(!appState.autoAdvancing) return;
+  const r=activeRecord(); if(!r){ pauseAutoAdvance(); return; }
+  const ctx=journeyVisibleContext(r);
+  if(ctx.finished || ctx.canPlayFavoriteToday){ pauseAutoAdvance(); return; }
+
+  const fromAbs=absoluteJourneyMinute(r.calendarDayIndex, r.journeyMinute);
+  const all=matchesWithAbsoluteMinutes(ctx.days);
+  const fav=r.favoriteTeam;
+
+  const next=all.find(x=>x.abs>fromAbs && !hasWatchedMatch(r,x.match) && x.match.home!==fav && x.match.away!==fav);
+  const favNext=all.find(x=>x.abs>fromAbs && !hasWatchedMatch(r,x.match) && (x.match.home===fav || x.match.away===fav));
+
+  if(!next || (favNext && favNext.abs<=next.abs)){
+    const jumpTo=favNext||null;
+    autoAnimateSky(r.calendarDayIndex, r.journeyMinute, jumpTo?jumpTo.dayIndex:r.calendarDayIndex, jumpTo?jumpTo.minute:r.journeyMinute, 1100, ()=>{
+      if(!appState.autoAdvancing) return;
+      if(jumpTo){
+        r.calendarDayIndex=jumpTo.dayIndex; r.journeyMinute=jumpTo.minute;
+        r.dayPhase=dayPhaseForMinute(jumpTo.minute); persistSims();
+      }
+      appState.autoAdvancing=false;
+      if(_autoRafId){ cancelAnimationFrame(_autoRafId); _autoRafId=null; }
+      if(appState.autoAdvanceTimer){ clearTimeout(appState.autoAdvanceTimer); appState.autoAdvanceTimer=null; }
+      renderFavoriteTeamJourney();
+    });
+    return;
+  }
+
+  autoAnimateSky(r.calendarDayIndex, r.journeyMinute, next.dayIndex, next.minute, 700, ()=>{
+    if(!appState.autoAdvancing) return;
+    const prevDay=r.calendarDayIndex;
+    r.calendarDayIndex=next.dayIndex; r.journeyMinute=next.minute;
+    r.dayPhase=dayPhaseForMinute(next.minute);
+    revealCalendarMatch(r, next.match); persistSims();
+
+    const afterBanner=()=>{
+      if(!appState.autoAdvancing) return;
+      appState.autoAdvanceTimer=setTimeout(runAutoAdvance, 120);
+    };
+
+    if(r.calendarDayIndex!==prevDay){
+      renderFavoriteTeamJourney();
+      appState.autoAdvanceTimer=setTimeout(()=>{ if(appState.autoAdvancing) showAutoAdvanceBanner(next.match, afterBanner); }, 100);
+    } else {
+      updateAutoAdvanceClock(next.minute);
+      showAutoAdvanceBanner(next.match, afterBanner);
+    }
+  });
+}
+
+function autoAnimateSky(fromDay, fromMin, toDay, toMin, duration, onComplete){
+  const fromAbs=absoluteJourneyMinute(fromDay, fromMin);
+  const toAbs=absoluteJourneyMinute(toDay, toMin);
+  if(toAbs<=fromAbs){ onComplete(); return; }
+  const diff=toAbs-fromAbs;
+  const start=performance.now();
+  function frame(now){
+    if(!appState.autoAdvancing){ onComplete(); return; }
+    const t=Math.min(1,(now-start)/duration);
+    const ease=1-Math.pow(1-t,3);
+    const minute=Math.round(fromAbs+diff*ease)%1440;
+    const shell=document.querySelector(".guided-shell");
+    if(shell){
+      shell.setAttribute("style", skyVarsForMinute(minute));
+      const night=dayPhaseForMinute(minute)==="night";
+      shell.classList.toggle("guided-night", night);
+      shell.classList.toggle("guided-day", !night);
+    }
+    const clockEl=document.getElementById("journeyClock");
+    if(clockEl) clockEl.textContent=formatJourneyMinute(minute);
+    const trackEl=document.querySelector(".journey-clock-track span");
+    if(trackEl) trackEl.style.width=`${Math.max(0,Math.min(100,(minute/1440)*100))}%`;
+    if(t<1){ _autoRafId=requestAnimationFrame(frame); }
+    else onComplete();
+  }
+  _autoRafId=requestAnimationFrame(frame);
+}
+
+function updateAutoAdvanceClock(minute){
+  const clockEl=document.getElementById("journeyClock");
+  if(clockEl) clockEl.textContent=formatJourneyMinute(minute);
+  const trackEl=document.querySelector(".journey-clock-track span");
+  if(trackEl) trackEl.style.width=`${Math.max(0,Math.min(100,(minute/1440)*100))}%`;
+}
+
+function showAutoAdvanceBanner(match, onComplete){
+  document.querySelector(".auto-advance-banner")?.remove();
+  const container=document.querySelector(".journey-hero-card");
+  if(!container){ onComplete(); return; }
+  const winner=getMatchWinnerTeam(match);
+  const barClass=!winner?"draw":winner===match.home?"from-left":"from-right";
+  const b=document.createElement("div");
+  b.className="auto-advance-banner";
+  b.innerHTML=`<div class="auto-advance-bar ${barClass}"></div>
+    <div class="auto-advance-result">
+      <span class="auto-advance-team">${flag(match.home)} <b>${match.home}</b></span>
+      <span class="auto-advance-score">${match.ga}<span style="margin:0 8px;opacity:.5">×</span>${match.gb}</span>
+      <span class="auto-advance-team"><b>${match.away}</b> ${flag(match.away)}</span>
+    </div>`;
+  container.style.position="relative";
+  container.appendChild(b);
+  appState.autoAdvanceTimer=setTimeout(()=>{
+    b.classList.add("is-out");
+    setTimeout(()=>{ b.remove(); onComplete(); }, 420);
+  }, 1650);
+}
+
 function renderFavoriteTeamJourney(){
   appState.view="journey";
   const record=activeRecord();
@@ -1100,7 +1234,7 @@ function renderFavoriteTeamJourney(){
   const previousTone=previousShell?.classList.contains("guided-night") ? "night" : previousShell?.classList.contains("guided-day") ? "day" : "";
   const nextTone=period==="night" ? "night" : "day";
   const transitionTone=previousTone && previousTone!==nextTone ? `sky-from-${previousTone}` : "";
-  const shellTone = (appState.darkMode || dayPhase==="night") ? "guided-night" : "guided-day";
+  const shellTone = dayPhase === "night" ? "guided-night" : "guided-day";
   renderGuided(`
     ${renderIntroNav("journey")}
     <div class="max-w-7xl mx-auto">
@@ -1153,6 +1287,8 @@ function renderFavoriteTeamJourney(){
     openMatchSimulator(match, idx>=0 ? idx : -1);
   });
   if($("#advanceJourneyClock")) $("#advanceJourneyClock").onclick=advanceJourneyClock;
+  if($("#autoAdvanceClock")) $("#autoAdvanceClock").onclick=startAutoAdvance;
+  if($("#pauseAutoAdvance")) $("#pauseAutoAdvance").onclick=pauseAutoAdvance;
   if($("#startJourney")) $("#startJourney").onclick=()=>{ if(matches[revealed] && !finished) openTacticPlanner(matches[revealed], revealed); };
   if($("#observeMatch")) $("#observeMatch").onclick=advanceObserverMatch;
   if($("#askDashboard")) $("#askDashboard").onclick=()=>{ if(finished) renderDashboardConfirmation(); };

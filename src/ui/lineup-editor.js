@@ -106,17 +106,27 @@ function distributeY(count){
   return presets[count] || presets[4];
 }
 function formationFieldSlots(){
-  const slots=plSlots();
+  const shape = plannerState.formation || "4-3-3";
+  const nums = String(shape).match(/\d+/g)?.map(Number) || [4,3,3];
   const mentalityShift = plannerState.mentality==="attack" ? 6 : plannerState.mentality==="defend" ? -6 : 0;
   const lineX = (base, pos) => pos==="GK" ? 11 : Math.max(18, Math.min(82, base + mentalityShift));
-  const lines=[
-    {pos:"GK", x:lineX(13,"GK"), count:slots.GK||1},
-    {pos:"DF", x:lineX(30,"DF"), count:slots.DF||0},
-    {pos:"MF", x:lineX(50,"MF"), count:slots.MF||0},
-    {pos:"FW", x:lineX(69,"FW"), count:slots.FW||0},
-  ];
-  return lines.flatMap(line=>distributeY(line.count).map((y,i)=>({
-    id:`${line.pos}-${i}`,
+  // 4-number formations (e.g. 4-2-3-1): render two separate MF rows
+  const lines = nums.length >= 4
+    ? [
+        {pos:"GK", x:lineX(13,"GK"), count:1},
+        {pos:"DF", x:lineX(29,"DF"), count:nums[0]},
+        {pos:"MF", x:lineX(43,"MF"), count:nums[1]},
+        {pos:"MF", x:lineX(57,"MF"), count:nums[2]},
+        {pos:"FW", x:lineX(71,"FW"), count:nums[3]},
+      ]
+    : [
+        {pos:"GK", x:lineX(13,"GK"), count:1},
+        {pos:"DF", x:lineX(30,"DF"), count:nums[0]||4},
+        {pos:"MF", x:lineX(50,"MF"), count:nums[1]||3},
+        {pos:"FW", x:lineX(69,"FW"), count:nums[2]||3},
+      ];
+  return lines.flatMap((line,li)=>distributeY(line.count).map((y,i)=>({
+    id:`${line.pos}-${li}-${i}`,
     pos:line.pos,
     x:line.x,
     y,

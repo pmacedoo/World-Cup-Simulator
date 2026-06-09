@@ -679,3 +679,57 @@
   html.dark-mode .nav-link:hover{color:#f8fafc;}
   html.dark-mode input,html.dark-mode select{background:rgba(15,23,42,.72);color:#e5edf8;border-color:rgba(148,163,184,.2);}
   html.dark-mode .dark-mode-toggle{color:#e5edf8;}
+  /* ---- journey clock panel ---- */
+  html.dark-mode .journey-clock-panel{background:rgba(15,23,42,.58);border-color:rgba(255,255,255,.08);box-shadow:inset 0 1px 0 rgba(255,255,255,.05);}
+  /* ---- lineup player carousel ---- */
+  html.dark-mode .lineup-player-carousel{background:rgba(15,23,42,.62);border-color:rgba(255,255,255,.08);}
+  html.dark-mode .pos-carousel-btn{color:#94a3b8;background:rgba(15,23,42,.72);border-color:rgba(255,255,255,.09);}
+  html.dark-mode .pos-carousel-btn:hover{color:#f8fafc;background:rgba(30,41,59,.88);}
+  /* ---- news cards dark mode ---- */
+  html.dark-mode .journey-news-card{background:linear-gradient(180deg,rgba(15,23,42,.84),rgba(11,16,32,.78));}
+  html.dark-mode .journey-news-window{background:rgba(11,16,32,.9);}
+  html.dark-mode .journey-news-item{background:linear-gradient(180deg,rgba(15,23,42,.97) 0%,rgba(11,16,32,.93) 100%);border-color:rgba(148,163,184,.10);}
+  html.dark-mode .journey-news-item.good{border-top-color:#16a34a;}
+  html.dark-mode .journey-news-item.bad{border-top-color:#b31942;}
+  html.dark-mode .journey-news-item h3{color:#f8fafc;}
+  html.dark-mode .journey-news-item p{color:#94a3b8;}
+  html.dark-mode .journey-news-meta{border-top-color:rgba(148,163,184,.12);color:#64748b;}
+  html.dark-mode .journey-news-tag{background:rgba(30,41,59,.85);color:#94a3b8;}
+  html.dark-mode .journey-news-item.good .journey-news-tag{color:#4ade80;background:rgba(22,163,74,.14);}
+  html.dark-mode .journey-news-item.bad .journey-news-tag{color:#f87171;background:rgba(179,25,66,.14);}
+  html.dark-mode .journey-news-dot{background:rgba(100,116,139,.35);}
+  html.dark-mode .journey-news-dot.is-active{background:#3b82f6;}
+
+/* ============================================================
+   AUTO-ADVANCE MATCH BANNER
+   ============================================================ */
+  .auto-advance-banner{
+    position:absolute;inset:0;z-index:30;border-radius:inherit;
+    display:flex;align-items:center;justify-content:center;
+    overflow:hidden;background:rgba(7,17,31,.58);
+    backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
+    animation:aaBannerIn .32s cubic-bezier(.2,.8,.2,1) both;
+  }
+  .auto-advance-banner.is-out{animation:aaBannerOut .4s ease both;}
+  @keyframes aaBannerIn{from{opacity:0}to{opacity:1}}
+  @keyframes aaBannerOut{to{opacity:0}}
+  .auto-advance-bar{position:absolute;inset:0;background:linear-gradient(90deg,rgba(31,122,77,.48) 0%,rgba(31,122,77,.06) 100%);}
+  .auto-advance-bar.from-right{background:linear-gradient(270deg,rgba(31,122,77,.48) 0%,rgba(31,122,77,.06) 100%);}
+  .auto-advance-bar.draw{background:rgba(31,122,77,.2);}
+  .auto-advance-bar.from-left{animation:aaBarL .95s cubic-bezier(.2,.8,.2,1) both;}
+  .auto-advance-bar.from-right{animation:aaBarR .95s cubic-bezier(.2,.8,.2,1) both;}
+  .auto-advance-bar.draw{animation:aaBarL .95s cubic-bezier(.2,.8,.2,1) both;}
+  @keyframes aaBarL{from{clip-path:inset(0 100% 0 0 round inherit)}to{clip-path:inset(0 0% 0 0 round inherit)}}
+  @keyframes aaBarR{from{clip-path:inset(0 0 0 100% round inherit)}to{clip-path:inset(0 0 0 0% round inherit)}}
+  .auto-advance-result{
+    position:relative;z-index:1;display:flex;align-items:center;gap:14px;
+    background:rgba(11,16,32,.82);border:1px solid rgba(255,255,255,.18);
+    border-radius:20px;padding:14px 22px;
+  }
+  .auto-advance-team{font-size:13px;font-weight:800;color:rgba(255,255,255,.88);}
+  .auto-advance-score{
+    font-family:"Plus Jakarta Sans",Inter,sans-serif;font-weight:900;
+    font-size:28px;color:#fff;padding:0 10px;
+    animation:aaScoreFlash .42s ease 1.05s 3 alternate;
+  }
+  @keyframes aaScoreFlash{from{color:#fff}to{color:#f5d272}}
