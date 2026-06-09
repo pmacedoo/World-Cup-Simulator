@@ -43,7 +43,8 @@
 <script src="https://unpkg.com/lucide@0.460.0/dist/umd/lucide.min.js"></script>
 
 <!-- ===================== CUSTOM CSS ===================== -->
-<link rel="stylesheet" href="./src/styles/styles.css" />
+<link rel="stylesheet" href="./src/styles/styles.css" id="app-css" />
+<script>document.getElementById('app-css').href='./src/styles/styles.css?v='+Date.now();</script>
 </head>
 
 <body class="font-sans text-ink antialiased selection:bg-usablue/20">
@@ -307,28 +308,45 @@
 </footer>
 
 <!-- ============================================================= -->
+<!-- DATA + ENGINE + RENDER — carregados em ordem com cache-bust  -->
+<!-- automático via timestamp (sem precisar atualizar versão)      -->
 <!-- ============================================================= -->
-<!-- DATA + ENGINE + RENDER                                         -->
-<!-- ============================================================= -->
-<!-- ============================================================= -->
-<script src="./src/data/worldcup-data.js"></script>
-<script src="./src/data/venues.js"></script>
-<script src="./src/data/worldcup-calendar.js"></script>
-<script src="./src/engine/random.js"></script>
-<script src="./src/engine/scoring.js"></script>
-<script src="./src/engine/lineups.js"></script>
-<script src="./src/domain/bracket/top-seed-protection.js"></script>
-<script src="./src/engine/simulation.js"></script>
-<script src="./src/app/narrative.js"></script>
-<script src="./src/state/simulation-profiles.js"></script>
-<script src="./src/state/simulation-store.js"></script>
-<script src="./src/ui/render-helpers.js"></script>
-<script src="./src/ui/guided-experience.js"></script>
-<script src="./src/ui/dashboard.js"></script>
-<script src="./src/ui/tournament-sections.js"></script>
-<script src="./src/ui/bracket.js"></script>
-<script src="./src/ui/match-simulator.js"></script>
-<script src="./src/ui/stats.js"></script>
-<script src="./src/app/app.js"></script>
+<script>
+(function () {
+  const v = Date.now();
+  const files = [
+    './src/data/worldcup-data.js',
+    './src/data/venues.js',
+    './src/data/worldcup-calendar.js',
+    './src/engine/random.js',
+    './src/engine/scoring.js',
+    './src/engine/lineups.js',
+    './src/domain/bracket/top-seed-protection.js',
+    './src/engine/simulation.js',
+    './src/app/narrative.js',
+    './src/state/simulation-profiles.js',
+    './src/state/simulation-store.js',
+    './src/ui/render-helpers.js',
+    './src/ui/guided-experience.js',
+    './src/ui/dashboard.js',
+    './src/ui/tournament-sections.js',
+    './src/ui/bracket.js',
+    './src/ui/match-simulator.js',
+    './src/ui/stats.js',
+    './src/app/app.js',
+  ];
+  files.reduce(function (chain, src) {
+    return chain.then(function () {
+      return new Promise(function (resolve, reject) {
+        var s = document.createElement('script');
+        s.src = src + '?v=' + v;
+        s.onload = resolve;
+        s.onerror = reject;
+        document.body.appendChild(s);
+      });
+    });
+  }, Promise.resolve());
+})();
+</script>
 </body>
 </html>
