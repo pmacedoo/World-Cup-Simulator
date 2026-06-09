@@ -121,8 +121,8 @@
     const onField = lineup.starters.slice();
     const bench = lineup.bench.slice();
     const subs = [];
-    // Jogadores que entraram como substitutos não podem sair novamente por substituição
-    const substitutedIn = new Set();
+    // Jogadores que saíram não podem voltar ao campo
+    const substitutedOut = new Set();
     const baseTarget = rng() < 0.18 ? 3 : rng() < 0.72 ? 4 : 5;
     const halftimeSubs = rng() < 0.26 ? 1 : 0;
     const windows = normalSubWindows(rng);
@@ -140,15 +140,16 @@
     }
 
     const trySub = (slot, concussion=false)=>{
-      // Somente titulares originais podem ser substituídos (quem entrou não pode sair)
-      const candidates = onField.filter(p=>p.pos!=="GK" && !substitutedIn.has(p.name));
+      const candidates = onField.filter(p=>p.pos!=="GK");
       if(!candidates.length || !bench.length) return;
       const outgoing = pickWeighted(rng, candidates, p=>Math.max(0.4, 8 - playerScore(p)));
-      const incoming = chooseIncoming(rng, bench, outgoing);
+      // Garante que quem já saiu não pode voltar como substituto
+      const eligible = bench.filter(p=>!substitutedOut.has(p.name));
+      const incoming = chooseIncoming(rng, eligible, outgoing);
       if(!incoming) return;
       onField.splice(onField.findIndex(p=>p.name===outgoing.name), 1, incoming);
       bench.splice(bench.findIndex(p=>p.name===incoming.name), 1);
-      substitutedIn.add(incoming.name);
+      substitutedOut.add(outgoing.name);
       subs.push({
         team: lineup.team,
         side,
