@@ -23,6 +23,7 @@ const POS_GROUPS = [
 ];
 
 let plannerState = null;
+let _plannerSuppressClickUntil = 0;
 
 function openTacticPlanner(match, journeyIndex=0){
   const record = activeRecord();
@@ -48,6 +49,7 @@ function openTacticPlanner(match, journeyIndex=0){
     subs: [],
     fieldPositions: base.positions || {},
     listPositionIndex: 0,
+    fieldSelection: "",
     error: "",
   };
   orderStarters();
@@ -196,6 +198,7 @@ function replaceStarterInSlot(slotIndex, name){
     setFieldSlot(name, slot);
   }
   st.error=plPos(name)!==slot.pos ? `${name} improvisado em ${slot.pos}: desempenho reduzido.` : "";
+  st.fieldSelection="";
   sanitizeRoles();
   sanitizeSubs();
   renderPlanner();
@@ -240,16 +243,26 @@ function setFormation(f){
   sanitizeRoles();
   if(!st.starters.length) st.captain = "";
   st.fieldPositions = {};
+  st.fieldSelection = "";
   st.error = "";
   sanitizeSubs();
   renderPlanner();
 }
 function toggleStarter(name){
   const st = plannerState;
+  if(st.fieldSelection && !st.starters.includes(name)){
+    const assigned=slotAssignments();
+    const slotIndex=assigned.findIndex(s=>s.name===st.fieldSelection);
+    if(slotIndex>=0){
+      replaceStarterInSlot(slotIndex, name);
+      return;
+    }
+  }
   const existingIdx = st.starters.indexOf(name);
   if(existingIdx>=0){
     st.starters.splice(existingIdx,1);
     delete st.fieldPositions[name];
+    if(st.fieldSelection===name) st.fieldSelection="";
     sanitizeRoles();
     st.error="";
     sanitizeSubs();
@@ -273,6 +286,12 @@ function toggleStarter(name){
 }
 function setCaptain(name){ if(plannerState.starters.includes(name)){ plannerState.captain=name; renderPlanner(); } }
 function setMentality(m){ plannerState.mentality=m; renderPlanner(); }
+function selectFieldPlayer(name){
+  if(!plannerState || !name) return;
+  plannerState.fieldSelection = plannerState.fieldSelection===name ? "" : name;
+  plannerState.error = plannerState.fieldSelection ? `${name} selecionado para sair. Agora escolha um reserva.` : "";
+  renderPlanner();
+}
 function addSub(){ if(plannerState.subs.length<5){ plannerState.subs.push({minute:70, out:"", in:""}); renderPlanner(); } }
 function removeSub(i){ plannerState.subs.splice(i,1); renderPlanner(); }
 function updateSub(i, field, value){
@@ -284,7 +303,7 @@ function resetAuto(){
   const auto = WC_LINEUPS.autoTactic(st.team);
   st.formation = auto.formation; st.starters = auto.starters.slice();
   st.captain = auto.captain; st.penaltyTaker = ""; st.freeKickTaker = "";
-  st.mentality = "balanced"; st.subs = []; st.fieldPositions = {}; st.error = "";
+  st.mentality = "balanced"; st.subs = []; st.fieldPositions = {}; st.fieldSelection = ""; st.error = "";
   orderStarters();
   renderPlanner();
 }
@@ -334,8 +353,8 @@ function renderLineupField(){
     <img class="lineup-field-img" src="public/assets/images/soccerfieldremaster.png" alt="Campo de futebol">
     <div class="lineup-field-overlay">
       ${assigned.map((slot,i)=>`
-        <div class="lineup-drop-slot ${slot.name?'filled':''} ${slot.name && plPos(slot.name)!==slot.pos?'misplaced':''}" data-slot="${i}" data-pos="${slot.pos}" style="left:${slot.x}%;top:${slot.y}%">
-          ${slot.name ? `<div class="lineup-field-player ${posToneClass(plPos(slot.name))} ${plPos(slot.name)!==slot.pos?'is-misplaced':''}" draggable="true" data-name="${slot.name}">
+        <div class="lineup-drop-slot ${slot.name?'filled':''} ${slot.name && plPos(slot.name)!==slot.pos?'misplaced':''} ${plannerState.fieldSelection===slot.name?'field-selected':''}" data-slot="${i}" data-pos="${slot.pos}" ${slot.name?`data-field-name="${slot.name}"`:""} style="left:${slot.x}%;top:${slot.y}%">
+          ${slot.name ? `<div class="lineup-field-player ${posToneClass(plPos(slot.name))} ${plannerState.fieldSelection===slot.name?'is-field-selected':''} ${plPos(slot.name)!==slot.pos?'is-misplaced':''}" draggable="true" data-name="${slot.name}">
             <span class="lineup-pos">${slot.pos}</span>
             <span class="lineup-name">${lineupCircleName(slot.name)}</span>
             ${plannerState.captain===slot.name?'<span class="lineup-captain">C</span>':''}
@@ -406,6 +425,14 @@ function setPlayerDragVisual(name, active){
     if(node.dataset.name===name) node.classList.toggle("is-dragging", active);
   });
 }
+function clearPlannerPointerDrag(drag, source, pointerId){
+  if(drag?.ghost) drag.ghost.remove();
+  if(source){
+    source.classList.remove("is-dragging");
+    source.releasePointerCapture?.(pointerId);
+  }
+  if(drag?.name) setPlayerDragVisual(drag.name, false);
+}
 function subRow(s, i){
   const startersOpts = [`<option value="">— sai —</option>`, ...plannerState.starters.map(n=>`<option value="${n}" ${n===s.out?'selected':''}>${n}</option>`)].join("");
   const benchOpts = [`<option value="">— entra —</option>`, ...plBench().map(n=>`<option value="${n}" ${n===s.in?'selected':''}>${n}</option>`)].join("");
@@ -440,13 +467,40 @@ function renderPlanner(){
       <p class="mt-1 text-sm text-slate-500 font-semibold">Técnico ${coach} · monte a escalação que vai a campo. Suas escolhas mudam o resultado.</p>
     </div>
 
-    <div class="mt-5 grid lg:grid-cols-[.92fr_1.08fr] gap-5 items-start">
-      <div class="space-y-4">
+    <div class="mt-5 space-y-5">
+      <div class="guided-card rounded-3xl p-4">
+        <div class="flex items-center justify-between mb-3">
+          <div class="flex items-center gap-2">
+            <div class="font-display font-extrabold text-lg">Escalação atual</div>
+            <button type="button" class="lineup-help-tip" aria-label="Como montar a escalação">
+              ${ic('help-circle','w-4 h-4')}
+              <span>Clique em um jogador para colocar ou tirar do campo. Se preferir, arraste da lista e solte na bolinha da posição.</span>
+            </button>
+          </div>
+          <button id="autoLineup" class="text-xs font-extrabold text-usablue hover:underline flex items-center gap-1">${ic('wand-2','w-3.5 h-3.5')} Automática</button>
+        </div>
+        ${st.error?`<div class="mb-3 rounded-2xl bg-usared/10 border border-usared/20 px-3 py-2 text-sm font-bold text-usared">${st.error}</div>`:""}
+        ${renderLineupField()}
+        <div class="mt-4">
+          ${positionCarousel()}
+        </div>
+      </div>
+
+      <div class="grid lg:grid-cols-2 gap-4 items-start">
         <div class="guided-card rounded-3xl p-4">
-          <div class="text-[11px] uppercase tracking-widest font-extrabold text-slate-400 mb-2">Formação</div>
+          <div class="text-[11px] uppercase tracking-widest font-extrabold text-slate-400 mb-2">Esquema tático</div>
           <div class="flex flex-wrap gap-2">
             ${WC_LINEUPS.FORMATIONS.map(f=>`<button class="formation-btn rounded-xl px-3 py-1.5 text-sm font-extrabold border ${f===st.formation?'bg-ink text-white border-ink':'glass text-slate-600 border-white/70'}" data-f="${f}">${f}</button>`).join("")}
           </div>
+        </div>
+
+        <div class="guided-card rounded-3xl p-4">
+          <div class="text-[11px] uppercase tracking-widest font-extrabold text-slate-400 mb-2">Força vs escalação padrão</div>
+          <div class="flex gap-2">
+            ${deltaPill("Ataque", rating.attackDelta)}
+            ${deltaPill("Defesa", rating.defenseDelta)}
+          </div>
+          <p class="mt-2 text-[11px] text-slate-400 font-semibold leading-snug">Em equivalente de força. O padrão do seu time é 0/0; mudanças de XI, formação e postura movem a agulha.</p>
         </div>
 
         <div class="guided-card rounded-3xl p-4">
@@ -465,9 +519,9 @@ function renderPlanner(){
           <select id="captainSelect" class="w-full rounded-2xl border border-slate-200 px-3 py-2.5 font-bold text-sm">${captainOptions()}</select>
         </div>
 
-        <div class="guided-card rounded-3xl p-4">
-          <div class="text-[11px] uppercase tracking-widest font-extrabold text-slate-400 mb-3">Batedores</div>
-          <div class="space-y-2.5">
+        <div class="guided-card rounded-3xl p-4 lg:col-span-2">
+          <div class="text-[11px] uppercase tracking-widest font-extrabold text-slate-400 mb-3">Cobradores</div>
+          <div class="grid sm:grid-cols-2 gap-3">
             <div class="flex items-center gap-3">
               <span class="text-xs font-extrabold text-slate-500 w-20 shrink-0 flex items-center gap-1">${ic('circle-dot','w-3.5 h-3.5 text-usared')} Pênalti</span>
               <select id="penTakerSelect" class="flex-1 rounded-2xl border border-slate-200 px-3 py-2 font-bold text-sm">
@@ -483,49 +537,7 @@ function renderPlanner(){
               </select>
             </div>
           </div>
-          <p class="mt-2.5 text-[10px] text-slate-400 font-semibold leading-snug">Escolha quem cobra pênaltis e faltas na partida. Afeta a narrativa e os cobranças na disputa.</p>
-        </div>
-
-        <div class="guided-card rounded-3xl p-4">
-          <div class="text-[11px] uppercase tracking-widest font-extrabold text-slate-400 mb-2">Força vs escalação padrão</div>
-          <div class="flex gap-2">
-            ${deltaPill("Ataque", rating.attackDelta)}
-            ${deltaPill("Defesa", rating.defenseDelta)}
-          </div>
-          <p class="mt-2 text-[11px] text-slate-400 font-semibold leading-snug">Em equivalente de força. O padrão do seu time é 0/0; mudanças de XI, formação e postura movem a agulha.</p>
-        </div>
-      </div>
-
-      <div class="space-y-4">
-        <div class="guided-card rounded-3xl p-4">
-          <div class="flex items-center justify-between mb-3">
-            <div class="flex items-center gap-2">
-              <div class="font-display font-extrabold text-lg">Escalação atual</div>
-              <button type="button" class="lineup-help-tip" aria-label="Como montar a escalação">
-                ${ic('help-circle','w-4 h-4')}
-                <span>Clique em um jogador para colocar ou tirar do campo. Se preferir, arraste da lista e solte na bolinha da posição.</span>
-              </button>
-            </div>
-            <button id="autoLineup" class="text-xs font-extrabold text-usablue hover:underline flex items-center gap-1">${ic('wand-2','w-3.5 h-3.5')} Automática</button>
-          </div>
-          ${st.error?`<div class="mb-3 rounded-2xl bg-usared/10 border border-usared/20 px-3 py-2 text-sm font-bold text-usared">${st.error}</div>`:""}
-          ${renderLineupField()}
-          <div class="mt-4">
-            ${positionCarousel()}
-          </div>
-        </div>
-
-        <div class="guided-card rounded-3xl p-4">
-          <div class="flex items-center justify-between mb-2">
-            <div>
-              <div class="font-display font-extrabold text-lg">Trocas planejadas</div>
-              <div class="text-[11px] text-slate-400 font-semibold">Opcional — entram no minuto marcado e afetam o jogo.</div>
-            </div>
-            <button id="addSub" class="glass rounded-xl px-3 py-1.5 text-xs font-extrabold text-slate-600 flex items-center gap-1 ${st.subs.length>=5?'opacity-40 pointer-events-none':''}">${ic('plus','w-3.5 h-3.5')} Troca</button>
-          </div>
-          <div class="space-y-2">
-            ${st.subs.length ? st.subs.map(subRow).join("") : '<div class="text-sm text-slate-400 font-semibold py-2">Sem trocas planejadas. Sua seleção pode jogar os 90 com o XI inicial.</div>'}
-          </div>
+          <p class="mt-2.5 text-[10px] text-slate-400 font-semibold leading-snug">Escolha quem cobra pênaltis e faltas na partida. Afeta a narrativa e as cobranças na disputa.</p>
         </div>
       </div>
     </div>
@@ -538,7 +550,6 @@ function renderPlanner(){
       </div>
     </div>`;
 
-  $("#addSub")?.closest(".guided-card")?.remove();
   wirePlanner();
   paintIcons();
 }
@@ -546,10 +557,14 @@ function renderPlanner(){
 function wirePlanner(){
   document.querySelectorAll("#tacticPlannerBox .formation-btn").forEach(b=> b.onclick=()=>setFormation(b.dataset.f));
   document.querySelectorAll("#tacticPlannerBox .mentality-btn").forEach(b=> b.onclick=()=>setMentality(b.dataset.m));
-  document.querySelectorAll("#tacticPlannerBox .planner-player").forEach(b=> b.onclick=()=>toggleStarter(b.dataset.name));
+  document.querySelectorAll("#tacticPlannerBox .planner-player").forEach(b=> b.onclick=()=>{
+    if(Date.now()<_plannerSuppressClickUntil || b.classList.contains("is-dragging")) return;
+    toggleStarter(b.dataset.name);
+  });
   document.querySelectorAll("#tacticPlannerBox .pos-carousel-btn").forEach(b=> b.onclick=()=>movePositionCarousel(Number(b.dataset.dir||0)));
   document.querySelectorAll("#tacticPlannerBox .pos-carousel-dot").forEach(b=> b.onclick=()=>{ plannerState.listPositionIndex=Number(b.dataset.posDot||0); renderPlanner(); });
   document.querySelectorAll("#tacticPlannerBox [draggable='true'][data-name]").forEach(el=>{
+    let pointerDrag=null;
     el.ondragstart=e=>{
       const name = el.dataset.name;
       e.dataTransfer.effectAllowed="move";
@@ -561,8 +576,42 @@ function wirePlanner(){
       plannerState.error="";
     };
     el.ondragend=()=>setPlayerDragVisual(el.dataset.name, false);
+    el.onpointerdown=e=>{
+      if(e.pointerType==="mouse") return;
+      const name=el.dataset.name;
+      pointerDrag={name, moved:false, ghost:createLineupDragGhost(name)};
+      el.setPointerCapture?.(e.pointerId);
+      el.classList.add("is-dragging");
+      setPlayerDragVisual(name, true);
+      pointerDrag.ghost.style.left=`${e.clientX-23}px`;
+      pointerDrag.ghost.style.top=`${e.clientY-23}px`;
+    };
+    el.onpointermove=e=>{
+      if(!pointerDrag) return;
+      pointerDrag.moved=true;
+      pointerDrag.ghost.style.left=`${e.clientX-23}px`;
+      pointerDrag.ghost.style.top=`${e.clientY-23}px`;
+    };
+    el.onpointerup=e=>{
+      if(!pointerDrag) return;
+      const drag=pointerDrag;
+      drag.ghost.style.display="none";
+      const target=document.elementFromPoint(e.clientX,e.clientY)?.closest?.("#tacticPlannerBox .lineup-drop-slot[data-slot]");
+      clearPlannerPointerDrag(drag, el, e.pointerId);
+      pointerDrag=null;
+      if(target || drag.moved) _plannerSuppressClickUntil=Date.now()+350;
+      if(target) replaceStarterInSlot(Number(target.dataset.slot), drag.name);
+    };
+    el.onpointercancel=e=>{
+      clearPlannerPointerDrag(pointerDrag, el, e.pointerId);
+      pointerDrag=null;
+    };
   });
   document.querySelectorAll("#tacticPlannerBox .lineup-drop-slot").forEach(slot=>{
+    slot.onclick=e=>{
+      const fieldName=slot.dataset.fieldName;
+      if(fieldName && Date.now()>=_plannerSuppressClickUntil) selectFieldPlayer(fieldName);
+    };
     slot.ondragover=e=>{
       e.preventDefault();
       slot.classList.add("drag-over");

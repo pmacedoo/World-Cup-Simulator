@@ -1,128 +1,158 @@
-# 🏆 Simulador Copa do Mundo FIFA 2026
+# World Cup Simulator
 
-Reportagem interativa e **simulador jogo a jogo** da Copa do Mundo FIFA 2026 (EUA · México · Canadá).
-Você escolhe uma seleção favorita e um estilo de simulação, vive a campanha **partida por partida, sem spoilers**, e só no final libera o **dashboard completo** com grupos, mata-mata, artilheiros, estatísticas e narrativa.
+Simulador interativo da Copa do Mundo FIFA 2026, com jornada guiada, calendario real, simulacao partida a partida, noticias dinamicas, escalação manual e dashboard completo da competicao.
 
-> ⚠️ **Projeto não-oficial e fictício.** Resultados, escalações e gols são projeções geradas por software. Onde a classificação/convocação ainda não eram oficiais, foram usadas projeções baseadas em ranking, eliminatórias, forma e elenco.
+O projeto funciona como uma experiencia de "modo carreira" da selecao favorita: o usuario escolhe um time, acompanha os dias da Copa, monta escalações, joga ou assiste partidas, ve noticias do torneio e libera o panorama completo conforme a simulacao avanca.
 
----
+> Projeto nao-oficial. Os dados, resultados, noticias e eventos sao simulados para fins de estudo, portfolio e entretenimento.
 
-## ✨ Destaques
+## Principais recursos
 
-- **Jornada guiada sem spoilers** — a campanha da sua seleção é revelada um jogo de cada vez. Placar do próximo jogo fica oculto até você simular.
-- **Simulador de partida animado** — relógio acelerado, barra de progresso, timeline de gols (autor, minuto, tipo) e resumo final.
-- **Disputa de pênaltis estilo simulador** — cobrança a cobrança, mini-gol com 6 zonas, bolinhas verde/vermelha, cobrança decisiva e confete quando a favorita vence.
-- **"Situação da Copa neste momento"** — após cada jogo, veja os **grupos parciais** e o **chaveamento até aquele ponto** (jogos futuros aparecem como *"A definir"*, sem estragar a surpresa).
-- **Simulações salvas** — crie quantas quiser (seleção + estilo), troque entre elas, **exclua** ou gere uma **nova**. Tudo persistido no navegador.
-- **Dashboard completo** como recompensa final: grupos A–L, todos os jogos, melhores terceiros, bracket responsivo, roteiro narrativo e estatísticas.
-- **48 seleções** com elencos reais, **12 grupos**, melhores terceiros e proteção dos 4 primeiros do ranking FIFA no chaveamento.
-- Visual **Apple-style**: glassmorphism, gradientes EUA/México/Canadá, **bandeiras reais** (flag-icons) e **ícones Lucide** (sem emojis).
+- Jornada guiada por selecao favorita, sem entregar todos os resultados de uma vez.
+- Calendario da Copa aplicado dia a dia, com jogos por data, horario, local e fase.
+- Ciclo visual de dia/noite baseado no horario da jornada.
+- Avanco automatico do tempo ate jogos importantes, resultados do dia ou proxima partida da selecao do usuario.
+- Simulador visual de partidas com placar, eventos, gols, tempo, prorrogacao e penaltis.
+- Tela de penaltis com imagem de gol, marcadores de cobranca e resultado visual.
+- Noticias dinamicas antes e depois dos jogos, com foco maior na selecao escolhida e tambem no restante do mundo.
+- Noticias especiais de classificacao, eliminacao, semifinais, quartas, terceiro lugar e campeao.
+- Dashboard completo com final em destaque, grupos, chaveamento, historico de jogos, estatisticas e campanha.
+- Chaveamento da Copa em formato visual mais proximo de bracket esportivo.
+- Protecao dos top seeds no mata-mata conforme regra de distribuicao por lados do chaveamento.
+- Elencos, tecnicos, formações base e dados de selecoes em arquivos separados.
+- Editor de escalação manual com campo visual, drag and drop, botao automatico opcional e penalidade por jogador improvisado fora da posicao.
+- Substituicoes dinamicas seguindo regra de 5 trocas, com suporte preparado para prorrogacao e expansoes futuras.
+- Simulacoes salvas em `localStorage`.
+- Interface responsiva para desktop e mobile.
 
----
+## Stack
 
-## 🧰 Stack
+- HTML
+- CSS
+- JavaScript puro
+- Vite
+- Tailwind CSS via CDN
+- Lucide Icons via CDN
+- flag-icons via CDN
+- Persistencia local com `localStorage`
 
-- **HTML + CSS + JavaScript puro** (sem framework, sem build, sem backend).
-- [Tailwind CSS](https://tailwindcss.com) (CDN) · [Lucide](https://lucide.dev) (ícones, CDN) · [flag-icons](https://github.com/lipis/flag-icons) (bandeiras, CDN).
-- Persistência via `localStorage`. Simulações são **determinísticas** (PRNG mulberry32 + seed salvo).
+## Como rodar
 
----
+Instale as dependencias:
 
-## ▶️ Como rodar
+```bash
+npm install
+```
 
-Basta abrir o **`index.html`** no navegador (duplo-clique ou arrastar para a janela).
+Rode em modo desenvolvimento:
 
-- Os arquivos precisam ficar **na mesma pasta**.
-- É necessário **internet na primeira carga** (Tailwind, Lucide e flag-icons vêm de CDN).
-- Não há etapa de build nem servidor. _(Opcional: para servir localmente, `npx serve .` ou abra via Live Server.)_
+```bash
+npm run dev
+```
 
----
+Gere build de producao:
 
-## 📁 Estrutura dos arquivos
+```bash
+npm run build
+```
 
-| Arquivo | Função |
-|---|---|
-| **`index.html`** | Marcação da página, CDNs e `<link>`/`<script>` dos arquivos locais. |
-| **`src/styles/styles.css`** | Todo o CSS customizado (glass, bracket, animações de partida e pênaltis, bandeiras). |
-| **`src/data/worldcup-data.js`** | **Base de dados** — define `window.WC_DATA = { TEAMS, GROUPS, ISO, THIRD_PLACE_SLOT_ORDER, THIRD_PLACE_MAP }`. |
-| **`src/data/venues.js`** | Sedes oficiais usadas para distribuir partidas. |
-| **`src/engine/random.js`** | PRNG determinístico e utilidades de aleatoriedade. |
-| **`src/engine/scoring.js`** | Tipos de gol e dados auxiliares de placar. |
-| **`src/domain/bracket/top-seed-protection.js`** | Regras de proteção dos cabeças de chave no mata-mata. |
-| **`src/engine/simulation.js`** | **Motor de simulação** (partidas, grupos, classificados, mata-mata, estatísticas e prêmios). |
-| **`src/app/narrative.js`** | Texto narrativo gerado a partir dos resultados simulados. |
-| **`src/state/simulation-profiles.js`** | Perfis Realística, Épica e Dramática, com seeds, caos e metadados. |
-| **`src/state/simulation-store.js`** | Estado global da experiência, cache de simulações e persistência em `localStorage`. |
-| **`src/ui/render-helpers.js`** | Helpers de DOM, bandeiras, ícones, badges e metadados visuais das seleções. |
-| **`src/ui/guided-experience.js`** | Fluxo de escolha, jornada guiada, snapshots e progresso sem spoilers. |
-| **`src/ui/dashboard.js`** | Abas, cards principais, visão geral e painel da seleção favorita. |
-| **`src/ui/tournament-sections.js`** | Elencos, grupos, jogos, terceiros e proteção de ranking. |
-| **`src/ui/bracket.js`** | Chaveamento, cards de mata-mata e modal de detalhes de partida. |
-| **`src/ui/match-simulator.js`** | Simulador visual de partida, timeline, pênaltis e confete. |
-| **`src/ui/stats.js`** | Narrativa renderizada, estatísticas, seleção ideal e destaques. |
-| **`src/app/app.js`** | Orquestração final, filtros, navegação, scroll/reveal e inicialização. |
-| **`src/legacy/prototype-legacy.js`** | Protótipo inicial — **não é carregado**, mantido apenas como referência histórica. |
+Visualize o build:
 
-Ordem de carga no `index.html`: dados → engine → narrativa → state → ui → `src/app/app.js`.
+```bash
+npm run preview
+```
 
----
+## Estrutura do projeto
 
-## 🧭 Fluxo da experiência
+```text
+.
+|-- index.html
+|-- package.json
+|-- public/
+|   `-- assets/images/
+|-- src/
+|   |-- app/
+|   |-- data/
+|   |-- domain/
+|   |-- engine/
+|   |-- state/
+|   |-- styles/
+|   `-- ui/
+`-- docs/
+```
 
-1. **Escolha da seleção** — grid com as 48 seleções (busca por nome/confederação/status).
-2. **Escolha do estilo** — Realística, Épica ou Dramática.
-3. **Jornada guiada (sem spoilers)** — simule um jogo por vez:
-   - Cada jogo revelado mostra placar, gols e os botões **Grupos agora** / **Chaveamento agora** / **Rever jogo**.
-   - O próximo jogo aparece só como prévia (confronto **sem placar**).
-   - Em mata-mata, partidas decididas no tempo normal/prorrogação ou nos **pênaltis animados**.
-4. **Fim da jornada** (eliminação ou título) → libera **"Ver Copa completa"**.
-5. **Dashboard completo** — toda a Copa revelada: visão geral, grupos, jogos, terceiros, mata-mata, roteiro e estatísticas.
+## Pastas principais
 
----
+`src/data`
+Base de dados do torneio: selecoes, grupos, calendario, sedes e informacoes auxiliares.
 
-## 💾 Simulações salvas (criar / trocar / excluir)
+`src/engine`
+Motor da simulacao: aleatoriedade deterministica, placares, criterios, escalações, substituicoes e simulacao da Copa.
 
-- Cada simulação salva guarda `{ seleção, estilo, seed, progresso }` no `localStorage` e é **regenerada de forma determinística** pelo seed.
-- **Criar nova:** botão "Nova simulação" (na jornada, no painel "Minhas simulações" e nas abas do dashboard).
-- **Trocar:** clique na simulação desejada (painel lateral ou aba do dashboard).
-- **Excluir:** ícone 🗑 na simulação.
-- **Reiniciar progresso:** revive a campanha da simulação ativa do zero (sem apagá-la).
+`src/domain`
+Regras de dominio mais isoladas, como protecao dos cabeças de chave no bracket.
 
-### Chaves de `localStorage`
-| Chave | Conteúdo |
-|---|---|
-| `wc_simulations_v1` | Lista de simulações salvas (seleção, tipo, seed, progresso). |
-| `wc_active_simulation_v1` | Id da simulação ativa. |
+`src/state`
+Perfis de simulacao, estado global, saves e persistencia local.
 
-**Resetar tudo:** exclua as simulações pelo 🗑 ou limpe o `localStorage` do site (DevTools → Application → Local Storage).
+`src/ui`
+Componentes e telas da experiencia: jornada guiada, dashboard, bracket, simulador de partida, editor de escalação e estatisticas.
 
----
+`src/styles`
+CSS customizado do projeto.
 
-## 🎛️ Onde ajustar
+`public/assets/images`
+Imagens usadas na interface, como campo e gol dos penaltis.
 
-Pesos e perfis em **`src/state/simulation-profiles.js`**:
+`docs`
+Documentacao tecnica e historico de organizacao do projeto.
 
-- **Pesos / estilo das simulações** → objeto `simulationProfiles` (`realistic`, `epic`, `dramatic`): `chaos`, `favoriteBias`, `upsetChance`, `drawChance`, `lateGoalChance`, `penaltyChance`, `extraTimeChance`, `starPlayerImpact`, etc.
-- **Duração da partida animada** → função `simulateMatch`: `const totalMs = match.pens ? 28000 : match.aet ? 25000 : 20000;`
-- **Duração dos pênaltis** → constantes `PK_PREP_MS`, `PK_SHOT_MS`, `PK_RESULT_MS` (para o ritmo 5s/5s do enunciado, use `PK_PREP_MS = 5000` e `PK_RESULT_MS = 5000`).
+## Fluxo da experiencia
 
----
+1. O usuario escolhe uma selecao favorita.
+2. Escolhe o perfil de simulacao.
+3. A jornada inicia no calendario da Copa.
+4. Em dias comuns, o usuario acompanha jogos do dia e noticias.
+5. Em dia de jogo da sua selecao, o usuario pode montar a escalação e jogar a partida.
+6. Depois da partida, o sistema mostra resultado, noticias, tabela/chaveamento e campanha.
+7. Se a selecao for eliminada, os dias continuam passando ate campeao e terceiro lugar.
+8. Ao fim da Copa, o dashboard completo fica disponivel.
 
-## 🔄 Atualizar os dados (após convocações/sorteio oficiais)
+## Escalacao e motor
 
-Edite apenas **`src/data/worldcup-data.js`**:
+O editor de escalação permite:
 
-- **`TEAMS`** — por seleção: `ovr` (força), `conf` (confederação), `coach` (técnico) e `sq` (elenco) no formato `["Nome","POS",pesoDeGol,"tags"]`
-  - `POS`: `GK` | `DF` | `MF` | `FW`
-  - `tags`: `S` (craque) · `Y` (jovem) · `G` (goleiro)
-- **`GROUPS`** — composição dos 12 grupos A–L.
-- **`ISO`** — código de bandeira (flag-icons) de cada seleção.
+- começar com escalação vazia;
+- preencher automaticamente apenas quando o usuario clicar no botao;
+- arrastar jogadores para o campo;
+- manter jogadores ao trocar formação;
+- colocar jogadores fora da posicao natural;
+- aplicar penalidade de desempenho quando um jogador esta improvisado;
+- destacar visualmente jogadores improvisados em vermelho;
+- usar cores diferentes por função: goleiro, defesa, meio-campo e ataque.
 
-O motor recalcula tudo automaticamente a partir dessa base.
+A escalação entra no motor como parte da tática da partida. Isso influencia o rating de ataque/defesa e tambem altera o seed da simulacao, entao mudanças taticas podem mudar o jogo.
 
----
+## Dados e simulacao
 
-## 🙌 Créditos
+O projeto usa dados locais para selecoes, elencos, grupos, calendario e sedes. A simulacao e deterministica a partir de seeds salvos, permitindo recriar resultados da mesma simulacao.
 
-Projeto de portfólio · visual inspirado em dashboards esportivos premium.
-Feito com Tailwind CSS, Lucide e flag-icons — sem backend, sem build step.
+Os principais pontos que influenciam os resultados sao:
+
+- força base das selecoes;
+- perfil da simulacao;
+- fase do torneio;
+- mando/campo neutro e contexto;
+- eventos gerados pelo motor;
+- escalação, postura e improvisacoes;
+- prorrogacao e penaltis quando necessario.
+
+## Autores
+
+- Macedo ([pmacedoo](https://github.com/pmacedoo))
+- Matheus ([MenezesMatheus](https://github.com/MenezesMatheus))
+- Victor ([VictorHGomes](https://github.com/VictorHGomes))
+
+## Aviso
+
+Este projeto nao tem relacao oficial com FIFA, Copa do Mundo, selecoes, confederacoes ou atletas. Ele e uma simulacao ficticia criada para aprendizado e demonstracao tecnica.

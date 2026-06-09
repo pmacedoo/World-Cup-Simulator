@@ -68,12 +68,16 @@ function openMatchSimulator(match, journeyIndex=0){
         <div class="text-[11px] uppercase tracking-widest font-extrabold text-slate-400">${match.matchNo?`M${match.matchNo} · `:''}${match.stage}</div>
         <div class="text-sm text-slate-500 font-semibold mt-1">${matchScheduleLine(match)}</div>
       </div>
-      ${renderSimulationTypeBadge(type)}
+      <div class="match-top-actions flex flex-wrap items-center justify-end gap-2">
+        ${editable?`<button id="liveSubBtn" class="btn-premium text-white rounded-2xl px-4 py-2.5 font-extrabold flex items-center gap-1.5">${ic('repeat-2','w-4 h-4')} Substituir</button>`:''}
+        <button id="skipMatchSim" class="glass rounded-2xl px-4 py-2.5 font-bold text-slate-700 flex items-center gap-1.5">${ic('fast-forward','w-4 h-4')} Pular</button>
+        ${renderSimulationTypeBadge(type)}
+      </div>
     </div>
     <div class="mt-6 grid grid-cols-[1fr_auto_1fr] items-center gap-3 sm:gap-6">
       <div id="simHomeSide" class="match-side rounded-3xl p-4 bg-white/60 text-right">
         <div class="flex justify-end mb-2">${flag(match.home,'flag-xl')}</div>
-        <div class="font-display font-extrabold text-xl sm:text-3xl">${match.home}</div>
+        <div class="match-team-name font-display font-extrabold text-xl sm:text-3xl">${match.home}</div>
       </div>
       <div class="text-center">
         <div id="simStageBadge" class="match-stage-badge ${stageTone.cls} mx-auto">${stageTone.label}</div>
@@ -83,7 +87,7 @@ function openMatchSimulator(match, journeyIndex=0){
       </div>
       <div id="simAwaySide" class="match-side rounded-3xl p-4 bg-white/60 text-left">
         <div class="flex justify-start mb-2">${flag(match.away,'flag-xl')}</div>
-        <div class="font-display font-extrabold text-xl sm:text-3xl">${match.away}</div>
+        <div class="match-team-name font-display font-extrabold text-xl sm:text-3xl">${match.away}</div>
       </div>
     </div>
     <div class="mt-6 h-3 rounded-full bg-slate-200/70 overflow-hidden">
@@ -92,31 +96,24 @@ function openMatchSimulator(match, journeyIndex=0){
     <div id="pkMount" class="mt-5"></div>
     <div id="liveSubMount" class="mt-4"></div>
     <div id="simInfoGrid" class="mt-5 grid lg:grid-cols-[1fr_.78fr] gap-4">
-      <div class="rounded-3xl bg-white/55 border border-white/70 p-4">
+      <div class="match-event-panel rounded-3xl bg-white/55 border border-white/70 p-4">
         <div class="text-[11px] uppercase tracking-widest font-extrabold text-slate-400 mb-3">Eventos da partida</div>
-        <div id="simTimeline" class="space-y-2 min-h-[220px]"></div>
+        <div id="simTimeline" class="match-scroll-area journey-scroll-list space-y-2"></div>
       </div>
-      <div class="rounded-3xl bg-white/55 border border-white/70 p-4">
+      <div class="match-summary-panel rounded-3xl bg-white/55 border border-white/70 p-4">
         <div class="text-[11px] uppercase tracking-widest font-extrabold text-slate-400">Resumo final</div>
-        <div id="simSummary" class="mt-3 text-sm text-slate-600 leading-relaxed">A transmissão acelerada vai começar. O placar final só aparece quando os eventos acontecerem.</div>
+        <div id="simSummary" class="match-summary-scroll journey-scroll-list mt-3 text-sm text-slate-600 leading-relaxed">A transmissão acelerada vai começar. O placar final só aparece quando os eventos acontecerem.</div>
       </div>
     </div>
     <div class="mt-5 flex flex-wrap justify-between gap-3">
-      <div class="flex flex-wrap gap-2">
-        ${editable?`<button id="liveSubBtn" class="btn-premium text-white rounded-2xl px-4 py-2.5 font-extrabold flex items-center gap-1.5">${ic('repeat-2','w-4 h-4')} Substituir</button>`:''}
-        <button id="restartMatchSim" class="glass rounded-2xl px-4 py-2.5 font-bold text-slate-700">Reiniciar simulação</button>
-        <button id="skipMatchSim" class="glass rounded-2xl px-4 py-2.5 font-bold text-slate-700 flex items-center gap-1.5">${ic('fast-forward','w-4 h-4')} Pular</button>
-        <button id="closeMatchSim" class="glass rounded-2xl px-4 py-2.5 font-bold text-slate-700">Fechar</button>
-      </div>
+      <div></div>
       <button id="backToJourney" class="btn-premium text-white rounded-2xl px-4 py-2.5 font-bold">Voltar à jornada</button>
     </div>`;
   const backToJourney=()=>{ closeMatchSimulator(); renderFavoriteTeamJourney(); };
   $("#matchSimulatorBox").querySelector("[data-close]").onclick=backToJourney;
-  $("#restartMatchSim").onclick=()=>{ appState.matchAnimationStarted=false; const sb=$("#skipMatchSim"); if(sb) sb.classList.remove("hidden"); simulateMatch(appState.currentSimulatedMatch?.match || match); };
-  $("#skipMatchSim").onclick=()=>skipMatchSimulation(match);
-  $("#closeMatchSim").onclick=backToJourney;
   $("#backToJourney").onclick=backToJourney;
   if($("#liveSubBtn")) $("#liveSubBtn").onclick=()=>openLiveSubPicker("live");
+  $("#skipMatchSim").onclick=()=>{ if(confirm("Pular a transmissão e mostrar o resultado final?")) skipMatchSimulation(match); };
   modal.classList.remove("hidden"); modal.classList.add("flex");
   setTimeout(()=>simulateMatch(match), 160);
   paintIcons();
@@ -180,11 +177,7 @@ function skipMatchSimulation(match){
     });
   }
 
-  const item=appState.currentSimulatedMatch;
-  if(item && item.match===match){
-    markCalendarMatchWatched(activeRecord(), match);
-    markMatchRevealed(activeRecord(), item.journeyIndex);
-  }
+  markSimulatedMatchComplete(match);
 
   if(match.penalties){
     if(infoGrid) infoGrid.classList.remove("hidden");
@@ -206,6 +199,15 @@ function skipMatchSimulation(match){
     if(favPlayed&&favWon) celebrateConfetti();
   }
   paintIcons();
+}
+
+function markSimulatedMatchComplete(match){
+  const item=appState.currentSimulatedMatch;
+  if(item && item.match===match){
+    item.finished=true;
+    if(typeof markCalendarMatchWatched==="function") markCalendarMatchWatched(activeRecord(), match);
+    if((item.journeyIndex|0) >= 0) markMatchRevealed(activeRecord(), item.journeyIndex);
+  }
 }
 
 function simulateMatch(match, resumeFrom=0){
@@ -328,18 +330,13 @@ function simulateMatch(match, resumeFrom=0){
     if(ratio>=1){
       clearInterval(appState.matchTimer);
       appState.matchTimer=null;
-      if(appState.currentSimulatedMatch) appState.currentSimulatedMatch.finished=true;
       scoreEl.textContent=`${match.ga} x ${match.gb}`;
       clockEl.textContent=match.aet?"120'":"90'";
       phaseEl.textContent="Fim de jogo";
       progressEl.style.width="100%";
       const skipBtn=$("#skipMatchSim"); if(skipBtn) skipBtn.classList.add("hidden");
       // revela este jogo na jornada (idempotente; só avança o progresso)
-      const item=appState.currentSimulatedMatch;
-      if(item && item.match===match){
-        if(typeof markCalendarMatchWatched==="function") markCalendarMatchWatched(activeRecord(), match);
-        if((item.journeyIndex|0) >= 0) markMatchRevealed(activeRecord(), item.journeyIndex);
-      }
+      if(!match.penalties) markSimulatedMatchComplete(match);
       if(!goals.length) addEvent(`<div class="font-extrabold text-slate-700">Fim do tempo${match.aet?' (após prorrogação)':''}.</div><div class="text-sm text-slate-500">${match.penalties?'Empate persiste — a decisão vai para os pênaltis.':'Defesas dominaram e ninguém abriu o placar.'}</div>`);
       if(match.penalties){
         clockEl.textContent = match.aet?"120'":"90'";
@@ -496,6 +493,84 @@ function handleSubDrop(fieldPlayer, benchPlayer){
   if(liveSubDraft.length < liveSubMaxRows()){ liveSubDraft.push({out:fieldPlayer, in:benchPlayer}); renderLiveSubPicker(); }
 }
 
+function createLiveSubDragGhost(name){
+  const pos=liveSubCtx?.posOf?.(name) || "MF";
+  const ghost=document.createElement("div");
+  ghost.className="lineup-drag-ghost live-sub-drag-ghost";
+  ghost.innerHTML=`<div class="lineup-field-player pos-tone-${pos.toLowerCase()}">
+    <span class="lineup-pos">${pos}</span>
+    <span class="lineup-name">${_lsNameCircle(name)}</span>
+  </div>`;
+  document.body.appendChild(ghost);
+  return ghost;
+}
+
+function wireLiveSubDragAndDrop(){
+  document.querySelectorAll("#liveSubMount [data-ls-bench='1'][draggable='true']").forEach(card=>{
+    let pointerDrag=null;
+    card.ondragstart=e=>{
+      const name=card.dataset.lsPlayer;
+      e.dataTransfer.effectAllowed="move";
+      e.dataTransfer.setData("text/plain", name);
+      card.classList.add("is-dragging");
+      const ghost=createLiveSubDragGhost(name);
+      if(e.dataTransfer.setDragImage) e.dataTransfer.setDragImage(ghost, 23, 23);
+      setTimeout(()=>ghost.remove(),0);
+    };
+    card.ondragend=()=>card.classList.remove("is-dragging");
+    card.onpointerdown=e=>{
+      if(e.pointerType==="mouse") return;
+      const name=card.dataset.lsPlayer;
+      pointerDrag={name, moved:false, ghost:createLiveSubDragGhost(name)};
+      card.setPointerCapture?.(e.pointerId);
+      card.classList.add("is-dragging");
+      pointerDrag.ghost.style.left=`${e.clientX-23}px`;
+      pointerDrag.ghost.style.top=`${e.clientY-23}px`;
+    };
+    card.onpointermove=e=>{
+      if(!pointerDrag) return;
+      pointerDrag.moved=true;
+      pointerDrag.ghost.style.left=`${e.clientX-23}px`;
+      pointerDrag.ghost.style.top=`${e.clientY-23}px`;
+    };
+    card.onpointerup=e=>{
+      if(!pointerDrag) return;
+      const ghost=pointerDrag.ghost;
+      ghost.style.display="none";
+      const target=document.elementFromPoint(e.clientX,e.clientY)?.closest?.(".sub-drop-target[data-field-name]");
+      ghost.remove();
+      card.classList.remove("is-dragging");
+      card.releasePointerCapture?.(e.pointerId);
+      const benchName=pointerDrag.name;
+      const moved=pointerDrag.moved;
+      pointerDrag=null;
+      if(target || moved) _liveSubSuppressClickUntil=Date.now()+350;
+      if(target){
+        handleSubDrop(target.dataset.fieldName, benchName);
+        _liveSubFieldSel=null; _liveSubBenchSel=null;
+      }
+    };
+    card.onpointercancel=()=>{
+      if(pointerDrag?.ghost) pointerDrag.ghost.remove();
+      pointerDrag=null;
+      card.classList.remove("is-dragging");
+    };
+  });
+  document.querySelectorAll("#liveSubMount .sub-drop-target[data-field-name]").forEach(slot=>{
+    slot.ondragover=e=>{ e.preventDefault(); slot.classList.add("drag-over"); };
+    slot.ondragleave=()=>slot.classList.remove("drag-over");
+    slot.ondrop=e=>{
+      e.preventDefault();
+      slot.classList.remove("drag-over");
+      const benchPlayer=e.dataTransfer.getData("text/plain");
+      if(benchPlayer){
+        handleSubDrop(slot.dataset.fieldName, benchPlayer);
+        _liveSubFieldSel=null; _liveSubBenchSel=null;
+      }
+    };
+  });
+}
+
 function startShootout(match){
   stopShootout();
   let sh=match.penalties; if(!sh) return;
@@ -614,6 +689,7 @@ function startShootout(match){
     const summary=$("#simSummary");
     const favPlayed=home===fav||away===fav, favWon=favPlayed&&winner===fav;
     if(summary) summary.innerHTML = `${flag(winner)} <b>${winner}</b> avança nos pênaltis por <b>${sh.homeScore} x ${sh.awayScore}</b> (no tempo normal, ${match.ga}–${match.gb}). ${favPlayed?(favWon?'Sua seleção sobreviveu ao drama das cobranças!':'Sua seleção caiu na loteria dos pênaltis.'):''}`;
+    markSimulatedMatchComplete(match);
     if(favWon) celebrateConfetti();
   })();
 }
@@ -663,6 +739,7 @@ let liveSubCtx = null;                    // contexto da janela aberta
 let _liveSubListIdx = 0;                  // índice do carrossel de posições
 let _liveSubFieldSel = null;              // jogador de campo selecionado para sair
 let _lastConfirmedSubs = null;            // [{out,in}] da última janela confirmada
+let _liveSubSuppressClickUntil = 0;
 
 function onFieldNamesAt(tactic, minute){
   const field = new Set(tactic.starters||[]);
@@ -800,7 +877,7 @@ function buildLiveSubCarousel(){
   const outSet=new Set((liveSubDraft||[]).filter(r=>r.out).map(r=>r.out));
   const i=Math.max(0,Math.min(_liveSubListIdx,POS_GROUPS.length-1));
   const group=POS_GROUPS[i];
-  const posPlayers=sq.filter(p=>p[1]===group.pos).map(p=>p[0]);
+  const posPlayers=benchPool.filter(name=>posOf(name)===group.pos);
   const cards=posPlayers.map(name=>{
     const isOnField=baseField.has(name);
     const isBench=benchPool.includes(name);
@@ -825,7 +902,7 @@ function buildLiveSubCarousel(){
     const icon=isOut?ic('arrow-up-from-line','w-3.5 h-3.5 flex-none')
       :isIn?ic('arrow-down-to-line','w-3.5 h-3.5 flex-none')
       :isFieldSel||isBenchSel?ic('check','w-3.5 h-3.5 flex-none'):"";
-    return `<button type="button" class="ls-player-card pos-tone-${group.pos.toLowerCase()} ${extraCls}"
+    return `<button type="button" class="ls-player-card pos-tone-${group.pos.toLowerCase()} ${extraCls}" draggable="${isBench&&!isIn&&!isOut?'true':'false'}"
       data-ls-player="${name}" data-ls-field="${isOnField?'1':''}" data-ls-bench="${isBench?'1':''}">
       <span class="ls-pos-badge">${group.pos}</span>
       <span class="min-w-0 flex-1">
@@ -839,7 +916,7 @@ function buildLiveSubCarousel(){
     <div class="flex items-center justify-between gap-3 mb-3">
       <button class="pos-carousel-btn" data-ls-dir="-1">${ic('chevron-left','w-4 h-4')}</button>
       <div class="text-center min-w-0">
-        <div class="text-[10px] uppercase tracking-widest font-extrabold text-slate-400 mb-0.5">Lista de jogadores</div>
+        <div class="text-[10px] uppercase tracking-widest font-extrabold text-slate-400 mb-0.5">Banco de reservas</div>
         <div class="font-display font-extrabold text-lg leading-tight">${group.label}</div>
       </div>
       <button class="pos-carousel-btn" data-ls-dir="1">${ic('chevron-right','w-4 h-4')}</button>
@@ -928,6 +1005,8 @@ function renderLiveSubPicker(){
   });
   document.querySelectorAll("#liveSubMount [data-ls-player]").forEach(card=>{
     card.onclick=()=>{
+      if(Date.now()<_liveSubSuppressClickUntil) return;
+      if(card.classList.contains("is-dragging")) return;
       const name=card.dataset.lsPlayer;
       const isBench=card.dataset.lsBench==="1";
       const isField=card.dataset.lsField==="1";
@@ -962,6 +1041,7 @@ function renderLiveSubPicker(){
       }
     };
   });
+  wireLiveSubDragAndDrop();
   mount.scrollIntoView({behavior:"smooth",block:"nearest"});
 }
 function cancelLiveSub(){

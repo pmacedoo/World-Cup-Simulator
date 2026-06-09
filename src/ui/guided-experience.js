@@ -1,6 +1,25 @@
 ﻿"use strict";
 
 let journeyNewsTimer = null;
+let journeyLayoutIsMobile = null;
+let journeyResizeTimer = null;
+
+function isMobileJourneyViewport(){
+  if(!window.matchMedia) return window.innerWidth <= 767;
+  return window.matchMedia("(max-width: 767px), (pointer: coarse) and (max-width: 1024px)").matches;
+}
+
+function scheduleJourneyLayoutRefresh(){
+  clearTimeout(journeyResizeTimer);
+  journeyResizeTimer = setTimeout(()=>{
+    if(appState.view!=="journey" || !activeRecord()?.id) return;
+    const nowMobile=isMobileJourneyViewport();
+    if(journeyLayoutIsMobile!==null && nowMobile!==journeyLayoutIsMobile) renderFavoriteTeamJourney();
+  }, 160);
+}
+
+window.addEventListener("resize", scheduleJourneyLayoutRefresh, {passive:true});
+window.addEventListener("orientationchange", scheduleJourneyLayoutRefresh, {passive:true});
 
 function startNewSimulation(){
   appState.draftTeam=null; appState.teamSearch=""; appState.view="picker-team";
@@ -152,16 +171,9 @@ function matchesWithAbsoluteMinutes(days){
 }
 function skyVarsForMinute(minute){
   const m=((minute%1440)+1440)%1440;
-  let dayStrength=0;
-  if(m>=300 && m<480) dayStrength=(m-300)/180;
-  else if(m>=480 && m<900) dayStrength=1;
-  else if(m>=900 && m<1080) dayStrength=.25 + (1 - (m-900)/180) * .75;
-  let nightStrength=0;
-  if(m>=1080) nightStrength=(m-1080)/360;
-  else if(m<300) nightStrength=1 - m/300;
-  const skyTop = dayStrength>.72 ? "#fbfdff" : dayStrength>.25 ? "#dbeafe" : nightStrength>.72 ? "#07111f" : "#64748b";
-  const skyBottom = dayStrength>.72 ? "#eef5fb" : dayStrength>.25 ? "#cbd5e1" : nightStrength>.72 ? "#111827" : "#475569";
-  return `--sky-top:${skyTop};--sky-bottom:${skyBottom};--sky-day:${dayStrength.toFixed(3)};--sky-night:${nightStrength.toFixed(3)};`;
+  const midnightOpacity=(1 + Math.cos((m/1440) * Math.PI * 2)) / 2;
+  const dayStrength=1-midnightOpacity;
+  return `--sky-day:${dayStrength.toFixed(3)};--sky-night:${midnightOpacity.toFixed(3)};--midnight-opacity:${midnightOpacity.toFixed(3)};`;
 }
 function matchFavoriteIndex(match, favoriteMatches){
   return favoriteMatches.findIndex(m=>m.matchNo===match.matchNo);
@@ -456,7 +468,7 @@ function journeyQuickSituation(ctx){
     const cs=campaignSummary(sim,team);
     return {tone:cs.status, eyebrow:"Noite · Jornada concluída", title:cs.title, text:cs.text};
   }
-  if(dayPhase==="morning"){
+  if(dayPhase==="morning" || nextMatch){
     if(!nextMatch) return {tone:"ready", eyebrow:"Manhã", title:"Aguardando próximo capítulo", text:`${flag(team)} ${team} ainda não tem um novo jogo aberto nesta jornada.`};
     const stage=isGroupStage(nextMatch) ? `Rodada ${nextMatch.round || revealed+1}` : nextMatch.stage;
     return {tone:"ready", eyebrow:`Manhã · ${stage}`, title:`Preparação contra ${nextMatch.opponent}`, text:`${flag(team)} ${team} se prepara para enfrentar ${flag(nextMatch.opponent)} ${nextMatch.opponent}. As notícias agora são de pré-jogo.`};
@@ -538,8 +550,8 @@ function renderCalendarDayCard(ctx, type){
     <div class="mt-4 grid gap-2">
       ${finished
         ? `<button id="askDashboard" class="btn-premium text-white font-extrabold rounded-2xl px-5 py-3.5">${ic('layout-dashboard','w-4 h-4')} Ver Copa completa</button>`
-        : ctx.canPlayFavoriteToday
-            ? `<button class="glass rounded-2xl px-5 py-3.5 font-extrabold text-slate-500 opacity-70 cursor-not-allowed">${ic('flag','w-4 h-4')} Jogue sua partida para encerrar o dia</button>`
+      : ctx.canPlayFavoriteToday
+            ? `<button id="startJourney" class="btn-premium text-white font-extrabold rounded-2xl px-5 py-3.5 flex items-center justify-center gap-2">${ic('play','w-4 h-4')} Jogar partida</button>`
             : appState.autoAdvancing
                 ? `<button id="pauseAutoAdvance" class="glass rounded-2xl px-5 py-3.5 font-extrabold text-slate-600 flex items-center justify-center gap-2">${ic('pause','w-4 h-4')} Pausar avanço</button>`
                 : `<button id="autoAdvanceClock" class="btn-premium text-white font-extrabold rounded-2xl px-5 py-3.5 flex items-center justify-center gap-2">${ic('play-circle','w-4 h-4')} Avançar automaticamente</button>`}
@@ -619,6 +631,7 @@ function journeyNewsItems(ctx){
   const secondKey=newsPlayer(team,1);
   const lastScore=last ? `${last.home} ${scoreLine(last)} ${last.away}` : "";
   const won=last?.favoriteWon, lost=last && !last.favoriteWon && !last.favoriteDrew;
+  const isPreFavoriteMatch = ctx.dayPhase==="morning" || ctx.canPlayFavoriteToday;
   const roundLabel = nextMatch
     ? (isGroupStage(nextMatch) ? `Rodada ${nextMatch.round || currentRound+1} do grupo` : nextMatch.stage)
     : (last ? (isGroupStage(last) ? `Rodada ${last.round || currentRound} do grupo` : last.stage) : "Pré-jogo");
@@ -656,7 +669,7 @@ function journeyNewsItems(ctx){
     const a=alive[0] || focus?.home || otherA;
     const b=alive[1] || focus?.away || otherB;
     const c=alive[2] || otherC;
-    if(ctx.dayPhase==="morning"){
+    if(isPreFavoriteMatch){
       return [
         {type:"bad", section:`Manhã · ${stage}`, tag:"PÓS-ELIMINAÇÃO", title:`${flag(team)} comissão de ${TEAMS[team].coach} segue acompanhando a Copa`, text:`Sem jogar, a delegação observa os jogos restantes e tenta entender onde a campanha perdeu força.`, meta:"Primeira página após a queda"},
         {type:"good", section:`Manhã · ${stage}`, tag:"PREPARAÇÃO", title:focus?`${flag(focus.home)} ${focus.home} e ${flag(focus.away)} ${focus.away} entram em dia decisivo`:`${flag(a)} ${a} mira próximo passo`, text:`A rodada agora coloca os sobreviventes sob pressão máxima, com treino curto e pouco espaço para erro.`, meta:focus?`${focus.stage} · ${matchScheduleLine(focus)}`:"Calendário final"},
@@ -675,13 +688,13 @@ function journeyNewsItems(ctx){
   }
   if(!favoriteMatchToday && dayMatches?.length){
     const baseDayPool = dayMatches.filter(m=>m.home!==team && m.away!==team);
-    const dayPool = ctx.dayPhase==="morning"
+    const dayPool = isPreFavoriteMatch
       ? baseDayPool.filter(m=>!hasWatchedMatch(activeRecord(),m) && parseMatchMinute(m.time)>=ctx.journeyMinute)
       : baseDayPool.filter(m=>hasWatchedMatch(activeRecord(),m));
-    const fallbackPool = ctx.dayPhase==="morning" ? (dayPool.length ? dayPool : baseDayPool) : dayPool;
+    const fallbackPool = isPreFavoriteMatch ? (dayPool.length ? dayPool : baseDayPool) : dayPool;
     const dm1=pickMatch(fallbackPool,0), dm2=pickMatch(fallbackPool,1), dm3=pickMatch(fallbackPool,2), dm4=pickMatch(fallbackPool,3), dm5=pickMatch(fallbackPool,4);
     const training = trainingNewsForOffDay(team, ctx);
-    if(ctx.dayPhase==="morning"){
+    if(isPreFavoriteMatch){
       return [
         training,
         {type:"good", section:"Manhã · Jogos do dia", tag:"AGENDA CHEIA", title:dm1?`${flag(dm1.home)} ${dm1.home} encara ${flag(dm1.away)} ${dm1.away}`:`${flag(otherA)} ${otherA} abre dia importante`, text:dm1?`A partida aparece como uma das vitrines do dia e pode mexer no humor da rodada.`:`A rodada começa com atenção dividida entre tabela, desgaste e favoritos.`, meta:dm1?matchScheduleLine(dm1):"Calendário da Copa"},
@@ -700,7 +713,7 @@ function journeyNewsItems(ctx){
       {type:"good", section:"Noite · Rodada", tag:"MAPA DA COPA", title:dm5?`${flag(getMatchWinnerTeam(dm5)||dm5.home)} ${getMatchWinnerTeam(dm5)||dm5.home} muda projeções`:`${flag(otherA)} ${otherA} ganha fôlego`, text:`Com a sua seleção sem jogo, o dia foi marcado por movimentos paralelos que importam para o caminho futuro.`, meta:dm5?matchResultText(dm5):"Panorama do dia"},
     ];
   }
-  if(ctx.dayPhase==="morning"){
+  if(isPreFavoriteMatch){
     const prepMatch=nextMatch;
     const opponent=prepMatch?.opponent || groupRivals[0] || otherA;
     const homeAway = prepMatch?.home===team ? "como mandante da tabela" : "fora da ordem principal da tabela";
@@ -901,8 +914,21 @@ function renderNextFavoriteScouting(ctx){
     </div>
   </div>`;
 }
-function renderJourneySituation(ctx){
+function renderJourneyActionButtons(ctx){
+  const {team, finished}=ctx;
+  return `<div class="grid gap-2">
+    ${finished
+      ? `<button id="askDashboard" class="btn-premium text-white font-extrabold rounded-2xl px-5 py-3.5">${ic('layout-dashboard','w-4 h-4')} Ver Copa completa</button>`
+      : ctx.canPlayFavoriteToday
+          ? `<button id="startJourney" class="btn-premium text-white font-extrabold rounded-2xl px-5 py-3.5 flex items-center justify-center gap-2">${ic('play','w-4 h-4')} Jogar partida</button>`
+          : appState.autoAdvancing
+              ? `<button id="pauseAutoAdvance" class="glass rounded-2xl px-5 py-3.5 font-extrabold text-slate-600 flex items-center justify-center gap-2">${ic('pause','w-4 h-4')} Pausar avanço</button>`
+              : `<button id="autoAdvanceClock" class="btn-premium text-white font-extrabold rounded-2xl px-5 py-3.5 flex items-center justify-center gap-2">${ic('play-circle','w-4 h-4')} Avançar automaticamente</button>`}
+  </div>`;
+}
+function renderJourneySituation(ctx, options={}){
   const {team, revealed, dayPhase, nextMatch, partialGroup, groupMatches, revealedMatches, observerMode, nextWatchMatch, lastWatchMatch, watchIndex, watchMatches, sim}=ctx;
+  const showScouting = options.showScouting !== false;
   const nextScouting=renderNextFavoriteScouting(ctx);
   if(observerMode){
     const m = dayPhase==="morning" ? nextWatchMatch : lastWatchMatch;
@@ -923,17 +949,17 @@ function renderJourneySituation(ctx){
         <div class="mt-2 text-sm font-semibold text-slate-500">A simulação já passou por todos os jogos restantes.</div>
       </div>`}
       <div class="mt-3 text-xs font-extrabold text-slate-500">${Math.min(watchIndex, watchMatches.length)}/${watchMatches.length} jogo(s) restantes acompanhados depois da eliminação.</div>
-      <div class="mt-3">${nextScouting}</div>
+      ${showScouting?`<div class="mt-3">${nextScouting}</div>`:""}
       ${daySnapshotButtons()}
     </div>`;
   }
   const lastRevealed = revealedMatches[revealedMatches.length-1];
   const inGroups = nextMatch ? isGroupStage(nextMatch) : lastRevealed && isGroupStage(lastRevealed) && revealed <= groupMatches.length;
-  if(dayPhase==="morning" && nextMatch){
+  if(nextMatch){
     return `<div class="journey-hero-card guided-card rounded-[2rem] p-4 guided-enter">
       <div class="flex items-center justify-between gap-3 mb-3">
         <div>
-          <div class="text-[11px] uppercase tracking-widest font-extrabold text-slate-400">Manhã de jogo</div>
+          <div class="text-[11px] uppercase tracking-widest font-extrabold text-slate-400">${dayPhase==="night"?"Noite de jogo":"Manhã de jogo"}</div>
           <h2 class="font-display font-extrabold text-2xl">Próxima partida</h2>
         </div>
         ${ic('sun','w-6 h-6 text-gold-600')}
@@ -947,7 +973,7 @@ function renderJourneySituation(ctx){
         </div>
         <div class="mt-3 text-sm font-semibold text-slate-500">${matchScheduleLine(nextMatch)}</div>
       </div>
-      <div class="mt-3">${nextScouting}</div>
+      ${showScouting?`<div class="mt-3">${nextScouting}</div>`:""}
       ${partialGroup?`<div class="mt-3">${compactGroupCard(partialGroup, team)}</div>`:""}
       ${daySnapshotButtons()}
     </div>`;
@@ -962,7 +988,7 @@ function renderJourneySituation(ctx){
         <span class="text-[11px] font-extrabold text-slate-400">${partialGroup.played}/3 rodadas</span>
       </div>
       ${compactGroupCard(partialGroup, team)}
-      <div class="mt-3">${nextScouting}</div>
+      ${showScouting?`<div class="mt-3">${nextScouting}</div>`:""}
       <p class="mt-3 text-xs font-semibold text-slate-500">${dayPhase==="night"?"Resultados do dia já entraram na classificação parcial.":"A tabela acompanha apenas o que já foi revelado na jornada."}</p>
       ${daySnapshotButtons()}
     </div>`;
@@ -986,9 +1012,224 @@ function renderJourneySituation(ctx){
         <div class="mt-1 font-extrabold text-sm leading-tight">${flag(nextMatch.home)} ${nextMatch.home} <span class="px-1.5 text-slate-400">x</span> ${flag(nextMatch.away)} ${nextMatch.away}</div>
       </div>`:""}
     </div>
-    <div class="mt-3">${nextScouting}</div>
+    ${showScouting?`<div class="mt-3">${nextScouting}</div>`:""}
     ${daySnapshotButtons()}
   </div>`;
+}
+
+const MOBILE_JOURNEY_TABS = [
+  {key:"game", label:"Jogo", icon:"play-circle"},
+  {key:"news", label:"Notícias", icon:"newspaper"},
+  {key:"table", label:"Tabela", icon:"git-fork"},
+  {key:"calendar", label:"Jogos", icon:"calendar-days"},
+  {key:"campaign", label:"Campanha", icon:"shield"},
+];
+function currentMobileJourneyTab(){
+  const key=appState.mobileJourneyTab || "game";
+  return MOBILE_JOURNEY_TABS.some(t=>t.key===key) ? key : "game";
+}
+function setMobileJourneyTab(key){
+  appState.mobileJourneyTab = MOBILE_JOURNEY_TABS.some(t=>t.key===key) ? key : "game";
+  renderFavoriteTeamJourney();
+}
+function mobileJourneyTitle(key){
+  return MOBILE_JOURNEY_TABS.find(t=>t.key===key)?.label || "Jogo";
+}
+function renderMobileJourneyFooter(active){
+  return `<nav class="mobile-journey-footer" aria-label="Navegação da jornada">
+    ${MOBILE_JOURNEY_TABS.map(tab=>`<button class="mobile-journey-tab ${active===tab.key?'active':''}" data-mobile-tab="${tab.key}" type="button">
+      ${ic(tab.icon,'w-5 h-5')}
+      <span>${tab.label}</span>
+    </button>`).join("")}
+  </nav>`;
+}
+function renderMobileCampaignPanel(ctx, matches, revealed){
+  const team=ctx.team;
+  const shown=matches.slice(0,revealed).slice(-4);
+  return `<div class="mobile-journey-panel-inner no-scroll">
+    <div class="guided-card rounded-[2rem] p-4 guided-enter">
+      <div class="mb-4">
+        <div class="flex items-start justify-between gap-4">
+          <div>
+            <div class="text-[11px] uppercase tracking-widest font-extrabold text-slate-400">Campanha de ${team}</div>
+            <div class="font-display font-extrabold text-2xl">Jogo a jogo</div>
+          </div>
+          <div class="text-right shrink-0">
+            <div class="text-[10px] uppercase tracking-widest font-extrabold text-slate-400">Progresso</div>
+            <div class="font-extrabold text-xl tnum">${revealed}<span class="text-slate-400 font-semibold text-sm"> / ${matches.length}</span></div>
+          </div>
+        </div>
+        <div class="mt-3 h-2.5 rounded-full bg-slate-200/70 overflow-hidden">
+          <div class="h-full rounded-full" style="width:${matches.length ? Math.round(revealed/matches.length*100) : 0}%;background:var(--grad-2026);transition:width .6s cubic-bezier(.2,.8,.2,1)"></div>
+        </div>
+        <div class="mt-1.5 flex items-center justify-between text-[10px] font-bold text-slate-400">
+          <span>${revealed===0 ? 'Nenhum jogo revelado ainda' : revealed>=matches.length ? 'Campanha concluída!' : matches.length-revealed===1 ? '1 jogo restante' : `${matches.length-revealed} jogos restantes`}</span>
+          <span class="tnum">${matches.length ? Math.round(revealed/matches.length*100) : 0}%</span>
+        </div>
+      </div>
+      <div class="space-y-2">
+        ${shown.length ? shown.map((m,idx)=>`<div class="rounded-2xl bg-white/70 border border-white/75 p-3">
+          <div class="text-[10px] uppercase tracking-widest font-extrabold text-slate-400">${m.stage}${m.matchNo?` · M${m.matchNo}`:""}</div>
+          <div class="mt-1 font-extrabold text-sm leading-tight">${flag(m.home)} ${m.home} <span class="tnum px-1.5">${scoreLine(m)}</span> ${flag(m.away)} ${m.away}</div>
+        </div>`).join("") : `<div class="rounded-2xl bg-white/70 border border-white/75 p-4 text-sm font-semibold text-slate-500">A campanha ainda não tem jogos revelados.</div>`}
+      </div>
+      <div class="mt-3 text-[11px] font-bold text-slate-400">${revealed>shown.length?`Mostrando os ${shown.length} jogos mais recentes.`:"Histórico da seleção na jornada."}</div>
+    </div>
+  </div>`;
+}
+function renderMobileCalendarPanel(ctx){
+  const {team, currentDay, dayMatches, journeyMinute}=ctx;
+  const visible=dayMatches.slice(0,4);
+  const hiddenCount=Math.max(0, dayMatches.length-visible.length);
+  return `<div class="mobile-journey-panel-inner no-scroll">
+    <div class="guided-card rounded-[2rem] p-4 guided-enter">
+      <div class="flex items-center justify-between gap-3 mb-4">
+        <div>
+          <div class="text-[11px] uppercase tracking-widest font-extrabold text-slate-400">Jogos do dia</div>
+          <h2 class="font-display font-extrabold text-2xl">${currentDay.dateLabel || "Calendário"}</h2>
+        </div>
+        ${ic('calendar-days','w-6 h-6 text-usablue')}
+      </div>
+      <div class="journey-scroll-list mobile-day-match-list space-y-2">
+        ${visible.length ? visible.map(m=>{
+          const isFavorite=m.home===team || m.away===team;
+          const watched=hasWatchedMatch(activeRecord(), m);
+          const due=parseMatchMinute(m.time)<=journeyMinute;
+          return `<div class="calendar-day-match rounded-2xl ${isFavorite?'bg-mxgreen/10 border-mxgreen/25':'bg-white/70 border-white/75'} border p-3">
+            <div class="flex items-start justify-between gap-3">
+              <div class="min-w-0">
+                <div class="text-[10px] uppercase tracking-widest font-extrabold ${isFavorite?'text-mxgreen':'text-slate-400'}">${m.matchNo?`M${m.matchNo} · `:''}${m.stage}${m.time?` · ${m.time}`:''}</div>
+                <div class="mt-1 font-extrabold text-sm leading-tight">${flag(m.home)} ${m.home} <span class="px-1.5 ${watched?'text-ink':'text-slate-400'}">${watched?scoreLine(m):(due?'aguardando':'x')}</span> ${flag(m.away)} ${m.away}</div>
+                <div class="mt-1 text-[11px] font-semibold text-slate-500">${m.venue || m.city || ""}</div>
+              </div>
+              <div class="flex-none">${calendarMatchAction(ctx,m)}</div>
+            </div>
+          </div>`;
+        }).join("") : `<div class="rounded-2xl bg-white/70 border border-white/75 p-4 text-sm font-semibold text-slate-500">Nenhum jogo previsto para este dia.</div>`}
+      </div>
+      ${hiddenCount?`<div class="mt-2 rounded-2xl bg-slate-100/80 border border-white/70 px-3 py-2 text-xs font-extrabold text-slate-500 text-center">+${hiddenCount} jogo(s) neste dia</div>`:""}
+      ${daySnapshotButtons()}
+    </div>
+  </div>`;
+}
+function renderMobileNextFavoriteCard(ctx){
+  const nextFav=nextFavoriteCalendarMatch(ctx);
+  if(!nextFav){
+    return `<div class="rounded-2xl bg-slate-100/80 border border-white/70 p-3 text-xs font-extrabold text-slate-500">Sem próximo jogo pendente da sua seleção.</div>`;
+  }
+  const match=nextFav.match;
+  const daysLeft=daysBetweenISO(ctx.currentDay.dateISO, match.dateISO);
+  const opponent=match.home===ctx.team ? match.away : match.home;
+  return `<div class="rounded-2xl bg-mxgreen/10 border border-mxgreen/20 p-3">
+    <div class="flex items-start justify-between gap-3">
+      <div class="min-w-0">
+        <div class="text-[9px] uppercase tracking-widest font-extrabold text-mxgreen">Próximo jogo</div>
+        <div class="mt-1 font-display font-extrabold text-base leading-tight truncate">${flag(match.home)} ${match.home} <span class="text-slate-400 px-1">x</span> ${flag(match.away)} ${match.away}</div>
+        <div class="mt-1 text-[11px] font-bold text-slate-500 truncate">${match.venue || match.city || `Adversário: ${opponent}`}</div>
+      </div>
+      <div class="text-right shrink-0">
+        <div class="text-[11px] font-extrabold text-slate-700 tnum">${match.dateLabel}</div>
+        <div class="text-[10px] font-bold text-slate-500">${daysLeft===0?"É hoje":`Faltam ${daysLeft}d`}${match.time?` · ${match.time}`:""}</div>
+      </div>
+    </div>
+  </div>`;
+}
+function renderMobileGamePanel(ctx, type){
+  const {team, currentDay, calendarDayIndex, days, finished, dayPhase, journeyMinute, dayMatches}=ctx;
+  const dayNo=calendarDayIndex+1;
+  const totalDays=days.length || 1;
+  const advance=appState.clockAdvance;
+  const highlightMatches=dayMatches.slice(0,2);
+  return `<div class="mobile-journey-panel-inner no-scroll">
+    <div class="journey-hero-card guided-card rounded-[2rem] p-4 guided-enter ${finished&&ctx.sim.champion===team?'confetti-soft':''}">
+      <div class="flex items-center justify-between gap-3">
+        ${renderSimulationTypeBadge(type)}
+        <span class="px-3 py-1.5 rounded-full text-[10px] uppercase tracking-widest font-extrabold ${dayPhase==="morning"?'bg-gold-500/15 text-gold-700':'bg-ink text-white'}">${dayPhase==="morning"?'Dia':'Noite'}</span>
+      </div>
+      <div class="mt-4 flex items-start justify-between gap-3">
+        <div>
+          <div class="text-[10px] uppercase tracking-widest font-extrabold text-slate-400">Dia ${dayNo}/${totalDays}</div>
+          <h1 class="font-display font-extrabold text-2xl leading-tight">${currentDay.dateLabel}</h1>
+          <p class="mt-1 text-xs text-slate-500 font-semibold">${flag(team)} ${team} · jornada da Copa</p>
+        </div>
+        ${flag(team,'flag-lg')}
+      </div>
+      <div class="journey-clock-panel ${advance?'is-ticking':''} mt-3 rounded-3xl p-3">
+        <div class="flex items-center justify-between gap-3">
+          <div>
+            <div class="text-[9px] uppercase tracking-widest font-extrabold text-slate-400">Relógio</div>
+            <div id="journeyClock" class="font-display font-extrabold text-3xl tnum">${formatJourneyMinute(journeyMinute)}</div>
+          </div>
+          <div class="text-right text-[11px] font-extrabold text-slate-500">
+            ${advance?`${formatJourneyMinute(advance.from)} → ${formatJourneyMinute(advance.to%1440)}`:dayPhase==="morning"?"Período diurno":"Período noturno"}
+          </div>
+        </div>
+        <div class="journey-clock-track mt-2"><span style="width:${Math.max(0, Math.min(100, (journeyMinute/1440)*100))}%"></span></div>
+      </div>
+      <div class="mt-3">${renderJourneyActionButtons(ctx)}</div>
+      <div class="mt-3 mobile-next-match-card">${renderMobileNextFavoriteCard(ctx)}</div>
+      <div class="mt-3 mobile-today-strip">
+        <div class="text-[9px] uppercase tracking-widest font-extrabold text-slate-400 mb-1.5">Hoje na Copa</div>
+        <div class="grid gap-1.5">
+          ${highlightMatches.length ? highlightMatches.map(m=>{
+            const watched=hasWatchedMatch(activeRecord(),m);
+            const due=parseMatchMinute(m.time)<=journeyMinute;
+            return `<div class="rounded-xl bg-white/60 border border-white/70 px-2.5 py-2">
+              <div class="flex items-center justify-between gap-2">
+                <div class="min-w-0 text-[11px] font-extrabold truncate">${flag(m.home)} ${m.home} <span class="${watched?'text-ink':'text-slate-400'} px-1">${watched?scoreLine(m):(due?'aguardando':'x')}</span> ${flag(m.away)} ${m.away}</div>
+                <div class="text-[9px] font-black text-slate-400 shrink-0">${m.time || ""}</div>
+              </div>
+            </div>`;
+          }).join("") : `<div class="rounded-xl bg-white/60 border border-white/70 px-2.5 py-2 text-[11px] font-bold text-slate-500">Sem jogos neste dia.</div>`}
+        </div>
+      </div>
+      <button id="resetGuidedSmall" class="mt-2 text-[11px] font-extrabold text-slate-400 hover:text-usared">Reiniciar progresso</button>
+    </div>
+  </div>`;
+}
+function renderMobileJourneyApp(ctx, type, matches, revealed){
+  const active=currentMobileJourneyTab();
+  const activeIndex=MOBILE_JOURNEY_TABS.findIndex(t=>t.key===active);
+  const panel = active==="news"
+    ? `<div class="mobile-journey-panel-inner no-scroll">${renderJourneyNews(ctx)}</div>`
+    : active==="table"
+      ? `<div class="mobile-journey-panel-inner no-scroll">${renderJourneySituation(ctx,{showScouting:false})}</div>`
+      : active==="calendar"
+        ? renderMobileCalendarPanel(ctx)
+        : active==="campaign"
+          ? renderMobileCampaignPanel(ctx, matches, revealed)
+          : renderMobileGamePanel(ctx, type);
+  return `<div class="mobile-journey-app" data-active-index="${activeIndex}">
+    <div class="mobile-journey-topbar">
+      <div class="min-w-0 text-center">
+        <div class="text-[10px] uppercase tracking-widest font-extrabold text-slate-400">Jornada</div>
+        <div class="font-display font-extrabold text-xl leading-tight">${mobileJourneyTitle(active)}</div>
+      </div>
+    </div>
+    <main id="mobileJourneyViewport" class="mobile-journey-viewport" data-mobile-active="${active}">
+      ${panel}
+    </main>
+    ${renderMobileJourneyFooter(active)}
+  </div>`;
+}
+function wireMobileJourneyTabs(){
+  document.querySelectorAll("[data-mobile-tab]").forEach(btn=>btn.onclick=()=>setMobileJourneyTab(btn.dataset.mobileTab));
+  const viewport=$("#mobileJourneyViewport");
+  if(!viewport) return;
+  let sx=0, sy=0;
+  viewport.addEventListener("touchstart", e=>{
+    const t=e.touches[0]; if(!t) return;
+    sx=t.clientX; sy=t.clientY;
+  }, {passive:true});
+  viewport.addEventListener("touchend", e=>{
+    const t=e.changedTouches[0]; if(!t) return;
+    const dx=t.clientX-sx, dy=t.clientY-sy;
+    if(Math.abs(dx)<55 || Math.abs(dx)<Math.abs(dy)*1.2) return;
+    const active=currentMobileJourneyTab();
+    const idx=MOBILE_JOURNEY_TABS.findIndex(tab=>tab.key===active);
+    const next=(MOBILE_JOURNEY_TABS.length + idx + (dx<0 ? 1 : -1)) % MOBILE_JOURNEY_TABS.length;
+    setMobileJourneyTab(MOBILE_JOURNEY_TABS[next].key);
+  }, {passive:true});
 }
 
 function setGuidedVisibility(showGuided){
@@ -1003,7 +1244,8 @@ function renderGuided(html, shellTone="", transitionTone="", shellStyle=""){
     journeyNewsTimer = null;
   }
   setGuidedVisibility(true);
-  $("#guidedExperience").innerHTML = `<section class="guided-shell ${shellTone} ${transitionTone}" style="${shellStyle}"><div class="guided-sky-fade" aria-hidden="true"></div><div class="guided-celestial" aria-hidden="true"></div><div class="guided-content">${html}</div></section>`;
+  const mobileShell = String(html).includes("mobile-journey-app") ? "guided-mobile-shell" : "";
+  $("#guidedExperience").innerHTML = `<section class="guided-shell ${shellTone} ${transitionTone} ${mobileShell}" style="${shellStyle}"><div class="guided-sky-fade" aria-hidden="true"></div><div class="guided-celestial" aria-hidden="true"></div><div class="guided-content">${html}</div></section>`;
   paintIcons();
 }
 function normalizeSearchText(value){
@@ -1165,7 +1407,9 @@ function runAutoAdvance(){
     ? {type:"favorite", ...nextFav}
     : {type:"match", ...nextOther};
 
-  autoAnimateSky(r.calendarDayIndex, r.journeyMinute, event.dayIndex, event.minute, 700, ()=>{
+  const jumpMinutes = Math.max(1, absoluteJourneyMinute(event.dayIndex, event.minute) - fromAbs);
+  const duration = Math.max(850, Math.min(2600, 520 + Math.sqrt(jumpMinutes) * 58));
+  autoAnimateSky(r.calendarDayIndex, r.journeyMinute, event.dayIndex, event.minute, duration, ()=>{
     if(!appState.autoAdvancing) return;
     const previousDay=r.calendarDayIndex;
     r.calendarDayIndex=event.dayIndex;
@@ -1202,9 +1446,9 @@ function autoAnimateSky(fromDay, fromMin, toDay, toMin, duration, onComplete){
   const diff=toAbs-fromAbs;
   const start=performance.now();
   function frame(now){
-    if(!appState.autoAdvancing){ onComplete(); return; }
+    if(!appState.autoAdvancing) return;
     const t=Math.min(1,(now-start)/duration);
-    const ease=1-Math.pow(1-t,3);
+    const ease=(Math.exp(3*t)-1)/(Math.exp(3)-1);
     const minute=Math.round(fromAbs+diff*ease)%1440;
     const shell=document.querySelector(".guided-shell");
     if(shell){
@@ -1279,37 +1523,41 @@ function renderFavoriteTeamJourney(){
   const nextTone=period==="night" ? "night" : "day";
   const transitionTone=previousTone && previousTone!==nextTone ? `sky-from-${previousTone}` : "";
   const shellTone = dayPhase === "night" ? "guided-night" : "guided-day";
-  renderGuided(`
-    ${renderIntroNav("journey")}
-    <div class="max-w-7xl mx-auto">
-      <div class="grid xl:grid-cols-[1fr_1.08fr_1fr] gap-5 items-stretch">
-      ${renderCalendarDayCard(ctx, type)}
-      ${renderJourneyNews(ctx)}
-      ${renderJourneySituation(ctx)}
-    </div>
-      <div class="guided-card rounded-[2rem] p-4 sm:p-5 guided-enter mt-5">
-        <div class="mb-4">
-          <div class="flex items-start justify-between gap-4">
-            <div>
-              <div class="text-[11px] uppercase tracking-widest font-extrabold text-slate-400">Campanha de ${team}</div>
-              <div class="font-display font-extrabold text-2xl">Jogo a jogo</div>
-            </div>
-            <div class="text-right shrink-0">
-              <div class="text-[10px] uppercase tracking-widest font-extrabold text-slate-400">Progresso</div>
-              <div class="font-extrabold text-xl tnum">${revealed}<span class="text-slate-400 font-semibold text-sm"> / ${matches.length}</span></div>
-            </div>
-          </div>
-          <div class="mt-3 h-2.5 rounded-full bg-slate-200/70 overflow-hidden">
-            <div class="h-full rounded-full" style="width:${matches.length ? Math.round(revealed/matches.length*100) : 0}%;background:var(--grad-2026);transition:width .6s cubic-bezier(.2,.8,.2,1)"></div>
-          </div>
-          <div class="mt-1.5 flex items-center justify-between text-[10px] font-bold text-slate-400">
-            <span>${revealed===0 ? 'Nenhum jogo revelado ainda' : revealed>=matches.length ? '🏆 Campanha concluída!' : matches.length-revealed===1 ? '1 jogo restante' : `${matches.length-revealed} jogos restantes`}</span>
-            <span class="tnum">${matches.length ? Math.round(revealed/matches.length*100) : 0}%</span>
-          </div>
-        </div>
-        ${progressiveCampaign(record)}
+  const isMobileJourney=isMobileJourneyViewport();
+  journeyLayoutIsMobile=isMobileJourney;
+  const journeyHtml = isMobileJourney
+    ? renderMobileJourneyApp(ctx, type, matches, revealed)
+    : `${renderIntroNav("journey")}
+      <div class="max-w-7xl mx-auto">
+        <div class="grid xl:grid-cols-[1fr_1.08fr_1fr] gap-5 items-stretch">
+        ${renderCalendarDayCard(ctx, type)}
+        ${renderJourneyNews(ctx)}
+        ${renderJourneySituation(ctx)}
       </div>
-    </div>`, `guided-${nextTone}`, transitionTone, skyVarsForMinute(ctx.journeyMinute));
+        <div class="guided-card rounded-[2rem] p-4 sm:p-5 guided-enter mt-5">
+          <div class="mb-4">
+            <div class="flex items-start justify-between gap-4">
+              <div>
+                <div class="text-[11px] uppercase tracking-widest font-extrabold text-slate-400">Campanha de ${team}</div>
+                <div class="font-display font-extrabold text-2xl">Jogo a jogo</div>
+              </div>
+              <div class="text-right shrink-0">
+                <div class="text-[10px] uppercase tracking-widest font-extrabold text-slate-400">Progresso</div>
+                <div class="font-extrabold text-xl tnum">${revealed}<span class="text-slate-400 font-semibold text-sm"> / ${matches.length}</span></div>
+              </div>
+            </div>
+            <div class="mt-3 h-2.5 rounded-full bg-slate-200/70 overflow-hidden">
+              <div class="h-full rounded-full" style="width:${matches.length ? Math.round(revealed/matches.length*100) : 0}%;background:var(--grad-2026);transition:width .6s cubic-bezier(.2,.8,.2,1)"></div>
+            </div>
+            <div class="mt-1.5 flex items-center justify-between text-[10px] font-bold text-slate-400">
+              <span>${revealed===0 ? 'Nenhum jogo revelado ainda' : revealed>=matches.length ? '🏆 Campanha concluída!' : matches.length-revealed===1 ? '1 jogo restante' : `${matches.length-revealed} jogos restantes`}</span>
+              <span class="tnum">${matches.length ? Math.round(revealed/matches.length*100) : 0}%</span>
+            </div>
+          </div>
+          ${progressiveCampaign(record)}
+        </div>
+      </div>`;
+  renderGuided(journeyHtml, `guided-${nextTone}`, transitionTone, skyVarsForMinute(ctx.journeyMinute));
   document.querySelectorAll(".day-snap-btn").forEach(b=> b.onclick=()=>openDaySnapshot(b.dataset.snap));
   document.querySelectorAll(".replay-btn").forEach(b=> b.onclick=()=>{ const i=Number(b.dataset.idx); if(matches[i]) openMatchSimulator(matches[i], i); });
   document.querySelectorAll(".switch-sim").forEach(b=> b.onclick=()=>{ setActiveSimulation(b.dataset.id); renderApp(); });
@@ -1335,8 +1583,9 @@ function renderFavoriteTeamJourney(){
   if($("#startJourney")) $("#startJourney").onclick=()=>{ if(matches[revealed] && !finished) openTacticPlanner(matches[revealed], revealed); };
   if($("#observeMatch")) $("#observeMatch").onclick=advanceObserverMatch;
   if($("#askDashboard")) $("#askDashboard").onclick=()=>{ if(finished) renderDashboardConfirmation(); };
-  $("#journeyTypeBack").onclick=changeSimulationType;
-  $("#resetGuidedSmall").onclick=resetGuidedExperience;
+  if($("#journeyTypeBack")) $("#journeyTypeBack").onclick=changeSimulationType;
+  if($("#resetGuidedSmall")) $("#resetGuidedSmall").onclick=resetGuidedExperience;
+  wireMobileJourneyTabs();
 }
 function renderDashboardConfirmation(){
   const team=getFavoriteTeam();
