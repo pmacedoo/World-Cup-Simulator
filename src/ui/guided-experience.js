@@ -40,6 +40,7 @@ function openFullDashboard(){
 }
 function renderIntroNav(step){
   const steps=[["team-picker","Seleção"],["type-picker","Tipo"],["journey","Jornada"],["dashboard","Dashboard"]];
+  const isDark=appState.darkMode;
   return `<div class="max-w-7xl mx-auto flex items-center justify-between gap-4 mb-8 guided-enter">
     <div class="flex items-center gap-2.5">
       <span class="grid place-items-center w-10 h-10 rounded-2xl text-white text-sm font-extrabold" style="background:var(--grad-2026)">26</span>
@@ -48,8 +49,13 @@ function renderIntroNav(step){
         <div class="text-xs text-slate-500 font-semibold">Viva primeiro a campanha da sua seleção</div>
       </div>
     </div>
-    <div class="hidden sm:flex items-center gap-2">
-      ${steps.map(([id,label],i)=>`<span class="px-3 py-1.5 rounded-full text-xs font-extrabold ${id===step?'bg-ink text-white':'glass text-slate-500'}">${i+1}. ${label}</span>`).join("")}
+    <div class="flex items-center gap-2">
+      <div class="hidden sm:flex items-center gap-2">
+        ${steps.map(([id,label],i)=>`<span class="px-3 py-1.5 rounded-full text-xs font-extrabold ${id===step?'bg-ink text-white':'glass text-slate-500'}">${i+1}. ${label}</span>`).join("")}
+      </div>
+      <button class="dark-mode-toggle guided-dark-toggle grid place-items-center w-9 h-9 rounded-xl glass shrink-0" title="${isDark?'Modo claro':'Modo escuro'}" aria-label="Alternar modo escuro">
+        ${ic(isDark?'sun':'moon','w-4 h-4')}
+      </button>
     </div>
   </div>`;
 }
@@ -701,6 +707,7 @@ function renderFavoriteTeamJourney(){
   const status=journeyQuickSituation(ctx);
   const nextMatch=ctx.nextMatch;
   const dayPhase=ctx.dayPhase;
+  const shellTone = (appState.darkMode || dayPhase==="night") ? "guided-night" : "guided-day";
   renderGuided(`
     ${renderIntroNav("journey")}
     <div class="max-w-7xl mx-auto">
@@ -740,12 +747,27 @@ function renderFavoriteTeamJourney(){
     </div>
       <div class="guided-card rounded-[2rem] p-4 sm:p-5 guided-enter mt-5">
         <div class="mb-4">
-          <div class="text-[11px] uppercase tracking-widest font-extrabold text-slate-400">Campanha de ${team}</div>
-          <div class="font-display font-extrabold text-2xl">Jogo a jogo</div>
+          <div class="flex items-start justify-between gap-4">
+            <div>
+              <div class="text-[11px] uppercase tracking-widest font-extrabold text-slate-400">Campanha de ${team}</div>
+              <div class="font-display font-extrabold text-2xl">Jogo a jogo</div>
+            </div>
+            <div class="text-right shrink-0">
+              <div class="text-[10px] uppercase tracking-widest font-extrabold text-slate-400">Progresso</div>
+              <div class="font-extrabold text-xl tnum">${revealed}<span class="text-slate-400 font-semibold text-sm"> / ${matches.length}</span></div>
+            </div>
+          </div>
+          <div class="mt-3 h-2.5 rounded-full bg-slate-200/70 overflow-hidden">
+            <div class="h-full rounded-full" style="width:${matches.length ? Math.round(revealed/matches.length*100) : 0}%;background:var(--grad-2026);transition:width .6s cubic-bezier(.2,.8,.2,1)"></div>
+          </div>
+          <div class="mt-1.5 flex items-center justify-between text-[10px] font-bold text-slate-400">
+            <span>${revealed===0 ? 'Nenhum jogo revelado ainda' : revealed>=matches.length ? '🏆 Campanha concluída!' : matches.length-revealed===1 ? '1 jogo restante' : `${matches.length-revealed} jogos restantes`}</span>
+            <span class="tnum">${matches.length ? Math.round(revealed/matches.length*100) : 0}%</span>
+          </div>
         </div>
         ${progressiveCampaign(record)}
       </div>
-    </div>`, dayPhase==="night" ? "guided-night" : "guided-day");
+    </div>`, shellTone);
   wireJourneyMatchButtons();
   document.querySelectorAll(".day-snap-btn").forEach(b=> b.onclick=()=>openDaySnapshot(b.dataset.snap));
   document.querySelectorAll(".replay-btn").forEach(b=> b.onclick=()=>{ const i=Number(b.dataset.idx); if(matches[i]) openMatchSimulator(matches[i], i); });
