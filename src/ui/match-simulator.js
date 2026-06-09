@@ -105,13 +105,15 @@ function openMatchSimulator(match, journeyIndex=0){
       <div class="flex flex-wrap gap-2">
         ${editable?`<button id="liveSubBtn" class="btn-premium text-white rounded-2xl px-4 py-2.5 font-extrabold flex items-center gap-1.5">${ic('repeat-2','w-4 h-4')} Substituir</button>`:''}
         <button id="restartMatchSim" class="glass rounded-2xl px-4 py-2.5 font-bold text-slate-700">Reiniciar simulação</button>
+        <button id="skipMatchSim" class="glass rounded-2xl px-4 py-2.5 font-bold text-slate-700 flex items-center gap-1.5">${ic('fast-forward','w-4 h-4')} Pular</button>
         <button id="closeMatchSim" class="glass rounded-2xl px-4 py-2.5 font-bold text-slate-700">Fechar</button>
       </div>
       <button id="backToJourney" class="btn-premium text-white rounded-2xl px-4 py-2.5 font-bold">Voltar à jornada</button>
     </div>`;
   const backToJourney=()=>{ closeMatchSimulator(); renderFavoriteTeamJourney(); };
   $("#matchSimulatorBox").querySelector("[data-close]").onclick=backToJourney;
-  $("#restartMatchSim").onclick=()=>simulateMatch(appState.currentSimulatedMatch?.match || match);
+  $("#restartMatchSim").onclick=()=>{ appState.matchAnimationStarted=false; const sb=$("#skipMatchSim"); if(sb) sb.classList.remove("hidden"); simulateMatch(appState.currentSimulatedMatch?.match || match); };
+  $("#skipMatchSim").onclick=()=>skipMatchSimulation(match);
   $("#closeMatchSim").onclick=backToJourney;
   $("#backToJourney").onclick=backToJourney;
   if($("#liveSubBtn")) $("#liveSubBtn").onclick=()=>openLiveSubPicker("live");
@@ -119,6 +121,90 @@ function openMatchSimulator(match, journeyIndex=0){
   setTimeout(()=>simulateMatch(match), 160);
   paintIcons();
 }
+function skipMatchSimulation(match){
+  if(appState.matchTimer){ clearInterval(appState.matchTimer); appState.matchTimer=null; }
+  stopShootout();
+  const scoreEl=$("#simScore"), clockEl=$("#simClock"), progressEl=$("#simProgress");
+  const timeline=$("#simTimeline"), summary=$("#simSummary"), phaseEl=$("#simPhase");
+  const pkMount=$("#pkMount"), infoGrid=$("#simInfoGrid"), skipBtn=$("#skipMatchSim");
+  if(!scoreEl) return;
+
+  scoreEl.textContent=`${match.ga} x ${match.gb}`;
+  clockEl.textContent=match.aet?"120'":"90'";
+  phaseEl.textContent="Fim de jogo";
+  progressEl.style.width="100%";
+  if(skipBtn) skipBtn.classList.add("hidden");
+
+  if(timeline){
+    const goals=(match.goals||[]).slice().sort((a,b)=>a.minute-b.minute);
+    const subWindows=Object.values((match.substitutions||[]).reduce((acc,s)=>{
+      const key=[s.team,s.minute,s.window,s.extraTime?"et":"",s.concussion?"conc":""].join("|");
+      acc[key]=acc[key]||{...s,kind:"subWindow",norm:normalizeGoalMinute(s.minute,match),changes:[]};
+      acc[key].changes.push(s); return acc;
+    },{}));
+    const yellowEvs=(match.yellows||[]).map(y=>({...y,kind:"yellow",norm:normalizeGoalMinute(y.minute,match)}));
+    const events=[
+      ...goals.map(g=>({...g,kind:"goal",norm:normalizeGoalMinute(g.minute,match)})),
+      ...subWindows,...yellowEvs
+    ].sort((a,b)=>a.norm.value-b.norm.value);
+    timeline.innerHTML=`<div class="goal-event rounded-2xl bg-slate-100/80 px-4 py-3 text-sm font-semibold text-slate-500">Apito inicial · Partida encerrada.</div>`;
+    let hg=0, ag=0;
+    const evWithScore=events.map(ev=>{
+      if(ev.kind==="goal"){ if(ev.team===match.home) hg++; else ag++; }
+      return {...ev, _hg:hg, _ag:ag};
+    });
+    evWithScore.forEach(ev=>{
+      if(ev.kind==="goal"){
+        timeline.insertAdjacentHTML("afterbegin",`<div class="goal-event rounded-2xl bg-white/80 border border-white/80 px-4 py-3 shadow-glass">
+          <div class="flex items-start gap-3">
+            <div class="grid place-items-center w-9 h-9 rounded-full bg-mxgreen/12 text-mxgreen font-extrabold">⚽</div>
+            <div><div class="font-extrabold text-slate-800">${ev.norm.display} — ${ev.player} marca para ${flag(ev.team)} ${ev.team}</div>
+            <div class="text-sm text-slate-500">${ev.type}${ev.assist?` · assistência de ${ev.assist}`:""} · placar ${ev._hg} x ${ev._ag}</div></div>
+          </div></div>`);
+      } else if(ev.kind==="yellow"){
+        timeline.insertAdjacentHTML("afterbegin",`<div class="goal-event rounded-2xl bg-white/80 border border-white/80 px-4 py-3 shadow-glass">
+          <div class="flex items-start gap-3">
+            <div class="grid place-items-center w-9 h-9 rounded-full bg-gold-500/15 text-gold-600 font-extrabold text-base">🟨</div>
+            <div><div class="font-extrabold text-slate-800">${ev.norm.display} — ${ev.player} recebe cartão amarelo</div>
+            <div class="text-sm text-slate-500">${flag(ev.team)} ${ev.team}</div></div>
+          </div></div>`);
+      } else {
+        const note=ev.concussion?"substituição extra":ev.extraTime?"troca na prorrogação":ev.window==="intervalo"?"troca no intervalo":`janela ${ev.window}`;
+        timeline.insertAdjacentHTML("afterbegin",`<div class="goal-event rounded-2xl bg-white/80 border border-white/80 px-4 py-3 shadow-glass">
+          <div class="flex items-start gap-3">
+            <div class="grid place-items-center w-9 h-9 rounded-full bg-usablue/10 text-usablue font-extrabold">${ic('repeat-2','w-4 h-4')}</div>
+            <div><div class="font-extrabold text-slate-800">${ev.norm.display} — ${flag(ev.team)} ${ev.team} mexe no time</div>
+            <div class="text-sm text-slate-500">${note}</div></div>
+          </div></div>`);
+      }
+    });
+  }
+
+  const item=appState.currentSimulatedMatch;
+  if(item && item.match===match) markMatchRevealed(activeRecord(), item.journeyIndex);
+
+  if(match.penalties){
+    if(infoGrid) infoGrid.classList.remove("hidden");
+    const sh=match.penalties;
+    if(pkMount) pkMount.innerHTML=`<div class="glass rounded-2xl p-5 text-center">
+      <div class="text-[11px] uppercase tracking-widest font-extrabold text-slate-400 mb-3 flex items-center justify-center gap-2">${ic('target','w-4 h-4 text-usared')} Disputa de pênaltis</div>
+      <div class="font-display font-extrabold text-4xl tnum">${sh.homeScore} <span class="text-slate-300 px-2">x</span> ${sh.awayScore}</div>
+      <div class="mt-3 font-extrabold text-lg text-mxgreen">${flag(sh.winner)} ${sh.winner} avança!</div>
+      <div class="mt-2 text-sm text-slate-500">(no tempo normal: ${match.ga}–${match.gb})</div></div>`;
+    if(summary) summary.innerHTML=`${flag(sh.winner)} <b>${sh.winner}</b> avança nos pênaltis por <b>${sh.homeScore} x ${sh.awayScore}</b> (no tempo normal, ${match.ga}–${match.gb}).`;
+    const fav=getFavoriteTeam(); const favPlayed=match.home===fav||match.away===fav;
+    if(favPlayed && sh.winner===fav) celebrateConfetti();
+  } else {
+    if(infoGrid) infoGrid.classList.remove("hidden");
+    if(pkMount) pkMount.innerHTML="";
+    const fav=getFavoriteTeam(); const favPlayed=match.home===fav||match.away===fav;
+    const favWon=favPlayed&&getMatchWinnerTeam(match)===fav;
+    if(summary) summary.innerHTML=`${flag(match.winner?.team||getMatchWinnerTeam(match)||match.home)} <b>${match.winner?.team||getMatchWinnerTeam(match)||"Empate"}</b> ${getMatchWinnerTeam(match)?"vence a partida":"fica no empate"} por <b>${scoreLine(match)}</b> em ${match.city}.${favPlayed?(favWon?" Sua seleção venceu este capítulo da jornada.":" Sua seleção não venceu este jogo."):""}`;
+    if(favPlayed&&favWon) celebrateConfetti();
+  }
+  paintIcons();
+}
+
 function simulateMatch(match, resumeFrom=0){
   if(appState.matchTimer) clearInterval(appState.matchTimer);
   stopShootout();                                  // limpa disputa anterior, se houver
@@ -140,7 +226,8 @@ function simulateMatch(match, resumeFrom=0){
     acc[key].changes.push(s);
     return acc;
   }, {}));
-  const events = [...goals, ...subWindows].sort((a,b)=>a.norm.value-b.norm.value || (a.kind==="goal" ? -1 : 1));
+  const yellowEvs = (match.yellows||[]).map(y=>({...y, kind:"yellow", norm:normalizeGoalMinute(y.minute, match)}));
+  const events = [...goals, ...subWindows, ...yellowEvs].sort((a,b)=>a.norm.value-b.norm.value || (a.kind==="goal" ? -1 : 1));
   let shown=0, homeGoals=0, awayGoals=0;
   const scoreEl=$("#simScore"), clockEl=$("#simClock"), progressEl=$("#simProgress"), timeline=$("#simTimeline"), summary=$("#simSummary");
   const homeSide=$("#simHomeSide"), awaySide=$("#simAwaySide"), phaseEl=$("#simPhase");
@@ -167,6 +254,14 @@ function simulateMatch(match, resumeFrom=0){
           <div class="text-sm text-slate-500">${g.type}${g.assist?` · assistência de ${g.assist}`:""} · placar ${homeGoals} x ${awayGoals}</div>
         </div>
       </div>`);
+      } else if(ev.kind==="yellow"){
+        addEvent(`<div class="flex items-start gap-3">
+          <div class="grid place-items-center w-9 h-9 rounded-full bg-gold-500/15 text-gold-600 font-extrabold text-base">🟨</div>
+          <div>
+            <div class="font-extrabold text-slate-800">${ev.norm.display} — ${ev.player} recebe cartão amarelo</div>
+            <div class="text-sm text-slate-500">${flag(ev.team)} ${ev.team}</div>
+          </div>
+        </div>`);
     } else {
       const note = ev.concussion ? "substituição extra por concussão" : ev.extraTime ? "troca extra na prorrogação" : ev.window==="tecnico" ? "decisão do técnico" : ev.window==="intervalo" ? "troca no intervalo" : `janela ${ev.window}`;
       const changes = ev.changes || [ev];
@@ -219,6 +314,7 @@ function simulateMatch(match, resumeFrom=0){
       clockEl.textContent=match.aet?"120'":"90'";
       phaseEl.textContent="Fim de jogo";
       progressEl.style.width="100%";
+      const skipBtn=$("#skipMatchSim"); if(skipBtn) skipBtn.classList.add("hidden");
       // revela este jogo na jornada (idempotente; só avança o progresso)
       const item=appState.currentSimulatedMatch;
       if(item && item.match===match){

@@ -1,6 +1,33 @@
 ﻿"use strict";
 
 /* =================================================================
+   DARK MODE
+   ================================================================= */
+const DARK_MODE_KEY = "wc_dark_mode";
+
+function applyDarkMode(dark){
+  document.documentElement.classList.toggle("dark-mode", dark);
+  document.querySelectorAll(".dark-mode-toggle i[data-lucide]").forEach(icon=>{
+    icon.dataset.lucide = dark ? "sun" : "moon";
+  });
+  document.querySelectorAll(".dark-mode-toggle").forEach(btn=>{
+    btn.title = dark ? "Alternar para modo claro" : "Alternar para modo escuro";
+    btn.setAttribute("aria-label", dark ? "Alternar para modo claro" : "Alternar para modo escuro");
+  });
+  paintIcons();
+}
+
+function toggleDarkMode(){
+  appState.darkMode = !appState.darkMode;
+  try { localStorage.setItem(DARK_MODE_KEY, String(appState.darkMode)); } catch{}
+  applyDarkMode(appState.darkMode);
+  // Re-render guided experience to update shell tone and toggle icon
+  if(appState.view==="journey" || appState.view==="picker-team" || appState.view==="picker-type"){
+    renderApp();
+  }
+}
+
+/* =================================================================
    RENDER ALL + interações
    ================================================================= */
 function renderAll(){
@@ -90,6 +117,11 @@ function setupScrollSpy(){
 function init(){
   // progressive-enhancement flag: enables reveal hiding only when JS runs
   document.documentElement.classList.add("js");
+
+  // Dark mode: load from localStorage
+  try { appState.darkMode = localStorage.getItem(DARK_MODE_KEY)==="true"; } catch{ appState.darkMode=false; }
+  applyDarkMode(appState.darkMode);
+
   // carrega simulações salvas pelo usuário (não há mais 3 simulações padrão)
   loadSims();
   if(appState.sims.length){
@@ -109,6 +141,12 @@ function init(){
   $("#mobBtn").onclick=()=> $("#mobMenu").classList.toggle("hidden");
   document.querySelectorAll("#mobMenu a").forEach(a=> a.onclick=()=> $("#mobMenu").classList.add("hidden"));
   document.addEventListener("keydown",e=>{ if(e.key==="Escape") closeModal(); });
+  // Dark mode toggle (static header button; guided nav buttons wired after each render via event delegation)
+  const dmToggle=$("#darkModeToggle"); if(dmToggle) dmToggle.onclick=toggleDarkMode;
+  document.addEventListener("click",e=>{
+    const btn=e.target.closest(".guided-dark-toggle");
+    if(btn) toggleDarkMode();
+  });
 
   renderApp();
   setupScrollSpy();
