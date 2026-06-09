@@ -313,6 +313,24 @@
     return sum;
   }
 
+  function positionPenalty(teamName, tactic, starters){
+    const team=TEAMS[teamName]; if(!team) return {attack:0, defense:0};
+    const byName=Object.fromEntries(team.sq.map(p=>[p[0],p]));
+    const positions=tactic.positions || {};
+    const posOrder={GK:0,DF:1,MF:2,FW:3};
+    let attack=0, defense=0;
+    (starters||[]).forEach(name=>{
+      const natural=byName[name]?.[1];
+      const assigned=positions[name]?.pos;
+      if(!natural || !assigned || natural===assigned) return;
+      const distance=Math.abs((posOrder[natural]??2)-(posOrder[assigned]??2));
+      const base=(natural==="GK" || assigned==="GK") ? 2.4 : distance>=2 ? 1.25 : 0.75;
+      attack += base * (natural==="FW" || assigned==="FW" ? 0.9 : 0.55);
+      defense += base * (natural==="GK" || assigned==="GK" || natural==="DF" || assigned==="DF" ? 0.95 : 0.55);
+    });
+    return {attack, defense};
+  }
+
   // rating ABSOLUTO de uma escalação (forma + qualidade do XI + postura + capitão),
   // antes de referenciar contra a tática padrão.
   function rawRating(teamName, tactic){
@@ -327,6 +345,7 @@
     const optimal=elevenQuality(teamName, bestElevenNames(teamName, shape));
     const chosen=elevenQuality(teamName, starters);
     const qualityPenalty=Math.max(0, optimal-chosen)*0.42;
+    const posPenalty=positionPenalty(teamName, tactic, starters);
     // 2) efeito da forma (relativo a 4-3-3: DF4/MF3/FW3)
     const slots=formationSlots(shape);
     const attackShape=(slots.FW-3)*0.8 + (slots.MF-3)*0.2;
@@ -339,8 +358,8 @@
     const cap=tactic.captain;
     const capBonus=(cap && ((team.sq.find(p=>p[0]===cap)?.[3]||"").includes("S") || (team.xi||[]).includes(cap))) ? 0.3 : 0;
     return {
-      attack: attackShape + attM - qualityPenalty + capBonus,
-      defense: defenseShape + defM - qualityPenalty + capBonus,
+      attack: attackShape + attM - qualityPenalty - posPenalty.attack + capBonus,
+      defense: defenseShape + defM - qualityPenalty - posPenalty.defense + capBonus,
     };
   }
 
@@ -365,10 +384,19 @@
     const base=lineupRating(teamName, tactic);
     const tl=[{from:0, att:base.attackDelta, def:base.defenseDelta}];
     const script=(tactic.liveScript||[]).slice().sort((a,b)=>(a.minute|0)-(b.minute|0));
-    const cur={ formation:tactic.formation, starters:(tactic.starters||[]).slice(), captain:tactic.captain, mentality:tactic.mentality };
+    const cur={ formation:tactic.formation, starters:(tactic.starters||[]).slice(), captain:tactic.captain, mentality:tactic.mentality, positions:{...(tactic.positions||{})} };
     script.forEach(ev=>{
       if(ev.type==="mentality") cur.mentality=ev.value;
-      else if(ev.type==="sub"){ const i=cur.starters.indexOf(ev.out); if(i>=0) cur.starters[i]=ev.in; }
+      else if(ev.type==="sub"){
+        const i=cur.starters.indexOf(ev.out);
+        if(i>=0){
+          cur.starters[i]=ev.in;
+          if(cur.positions[ev.out]){
+            cur.positions[ev.in]=cur.positions[ev.out];
+            delete cur.positions[ev.out];
+          }
+        }
+      }
       const r=lineupRating(teamName, cur);
       tl.push({from:Math.max(0, Math.min(120, ev.minute|0)), att:r.attackDelta, def:r.defenseDelta});
     });
@@ -378,7 +406,10 @@
   // hash estável da tática (toda escolha entra, inclusive o roteiro ao vivo)
   function tacticHash(tactic){
     const t=tactic||{};
+    const positions=Object.entries(t.positions||{}).sort(([a],[b])=>a.localeCompare(b))
+      .map(([name,p])=>`${name}:${p.slot||""}:${p.pos||""}`).join(",");
     const text=[t.formation, (t.starters||[]).join(","), t.captain, t.mentality,
+      positions,
       (t.liveScript||[]).map(e=>`${e.minute|0}${e.type}${e.out||""}${e.in||""}${e.value||""}`).join(";")].join("|");
     let h=2166136261>>>0;
     for(let i=0;i<text.length;i++){ h^=text.charCodeAt(i); h=Math.imul(h,16777619)>>>0; }
@@ -394,7 +425,9 @@
   // hash só do SETUP de kickoff (formação + XI + capitão + postura), SEM o liveScript.
   function setupHash(tactic){
     const t=tactic||{};
-    const text=[t.formation, (t.starters||[]).join(","), t.captain, t.mentality].join("|");
+    const positions=Object.entries(t.positions||{}).sort(([a],[b])=>a.localeCompare(b))
+      .map(([name,p])=>`${name}:${p.slot||""}:${p.pos||""}`).join(",");
+    const text=[t.formation, (t.starters||[]).join(","), t.captain, t.mentality, positions].join("|");
     let h=2166136261>>>0;
     for(let i=0;i<text.length;i++){ h^=text.charCodeAt(i); h=Math.imul(h,16777619)>>>0; }
     return h>>>0;
@@ -410,12 +443,11 @@
   function validateTactic(teamName, tactic){
     const team=TEAMS[teamName];
     const names=new Set((team?.sq||[]).map(p=>p[0]));
-    const byName=Object.fromEntries((team?.sq||[]).map(p=>[p[0],p]));
     const slots=formationSlots(tactic?.formation);
     let starters=[...new Set((tactic?.starters||[]).filter(n=>names.has(n)))];
-    const count=pos=>starters.filter(n=>byName[n]?.[1]===pos).length;
-    const valid = starters.length===11 && count("GK")===1 &&
-      count("DF")===slots.DF && count("MF")===slots.MF && count("FW")===slots.FW;
+    const positions=tactic?.positions || {};
+    const occupied=new Set(starters.map(n=>positions[n]?.slot).filter(Boolean));
+    const valid = starters.length===11 && (!Object.keys(positions).length || occupied.size===11);
     return {valid, starters, slots};
   }
 

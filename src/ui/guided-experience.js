@@ -126,29 +126,21 @@ function formatJourneyMinute(minute){
   const m=Math.max(0, Math.min(1439, minute|0));
   return `${String(Math.floor(m/60)).padStart(2,"0")}:${String(m%60).padStart(2,"0")}`;
 }
+function daysBetweenISO(fromISO, toISO){
+  if(!fromISO || !toISO) return null;
+  const from=Date.parse(`${fromISO}T00:00:00`);
+  const to=Date.parse(`${toISO}T00:00:00`);
+  if(!Number.isFinite(from) || !Number.isFinite(to)) return null;
+  return Math.max(0, Math.round((to-from)/86400000));
+}
 function periodForMinute(minute){
   return minute>=300 && minute<1080 ? "day" : "night";
 }
 function dayPhaseForMinute(minute){
   return periodForMinute(minute)==="day" ? "morning" : "night";
 }
-function nextPeriodBoundary(minute){
-  if(minute < 300) return {minute:300, label:"amanhecer"};
-  if(minute < 1080) return {minute:1080, label:"anoitecer"};
-  return {minute:1440, label:"próximo dia"};
-}
 function absoluteJourneyMinute(dayIndex, minute){
   return Math.max(0, dayIndex|0)*1440 + Math.max(0, Math.min(1439, minute|0));
-}
-function splitAbsoluteMinute(abs){
-  const safe=Math.max(0, abs|0);
-  return {dayIndex:Math.floor(safe/1440), minute:safe%1440};
-}
-function nextPeriodBoundaryAbs(dayIndex, minute){
-  const abs=absoluteJourneyMinute(dayIndex, minute);
-  if(minute < 300) return {abs:dayIndex*1440 + 300, dayIndex, minute:300, label:"amanhecer"};
-  if(minute < 1080) return {abs:dayIndex*1440 + 1080, dayIndex, minute:1080, label:"anoitecer"};
-  return {abs:(dayIndex+1)*1440 + 300, dayIndex:dayIndex+1, minute:300, label:"amanhecer"};
 }
 function matchesWithAbsoluteMinutes(days){
   return (days||[]).flatMap((day,dayIndex)=>(day.matches||[]).map(match=>({
@@ -174,6 +166,12 @@ function skyVarsForMinute(minute){
 function matchFavoriteIndex(match, favoriteMatches){
   return favoriteMatches.findIndex(m=>m.matchNo===match.matchNo);
 }
+function nextFavoriteCalendarMatch(ctx){
+  return matchesWithAbsoluteMinutes(ctx.days)
+    .filter(x=>x.match.home===ctx.team || x.match.away===ctx.team)
+    .filter(x=>!hasWatchedMatch(activeRecord(), x.match))
+    .find(x=>x.abs>=absoluteJourneyMinute(ctx.calendarDayIndex, ctx.journeyMinute)) || null;
+}
 function hasWatchedMatch(record, match){
   return !!match?.matchNo && (record.watchedMatchNos||[]).includes(match.matchNo);
 }
@@ -182,43 +180,21 @@ function markCalendarMatchWatched(record, match){
   appState.clockAdvance = null;
   record.watchedMatchNos = [...new Set([...(record.watchedMatchNos||[]), match.matchNo])];
   const minute=parseMatchMinute(match.time);
-  record.journeyMinute=Math.max(record.journeyMinute??300, minute);
+  const days=tournamentDays(simObjFor(record));
+  const found=matchesWithAbsoluteMinutes(days).find(x=>x.match.matchNo===match.matchNo);
+  const currentAbs=absoluteJourneyMinute(record.calendarDayIndex||0, record.journeyMinute??300);
+  if(found && found.abs>=currentAbs){
+    record.calendarDayIndex=found.dayIndex;
+    record.journeyMinute=found.minute;
+  } else {
+    record.journeyMinute=Math.max(record.journeyMinute??300, minute);
+  }
   record.dayPhase=dayPhaseForMinute(record.journeyMinute);
   persistSims();
 }
 function revealCalendarMatch(record, match){
   if(!record || !match?.matchNo) return;
   record.watchedMatchNos = [...new Set([...(record.watchedMatchNos||[]), match.matchNo])];
-}
-function advanceJourneyClock(){
-  const r=activeRecord(); if(!r) return;
-  const ctx=journeyVisibleContext(r);
-  if(ctx.finished) return;
-  const from=absoluteJourneyMinute(ctx.calendarDayIndex, ctx.journeyMinute);
-  const boundary=nextPeriodBoundaryAbs(ctx.calendarDayIndex, ctx.journeyMinute);
-  const pending=matchesWithAbsoluteMinutes(ctx.days)
-    .filter(x=>!hasWatchedMatch(r,x.match))
-    .filter(x=>x.abs>=from && x.abs<boundary.abs);
-  const next=pending[0];
-  appState.clockAdvance = {from:ctx.journeyMinute, to: next ? next.minute : boundary.minute, matchNo:next?.match?.matchNo || null};
-  if(next){
-    r.calendarDayIndex=next.dayIndex;
-    r.journeyMinute=next.minute;
-    if(next.match.home===r.favoriteTeam || next.match.away===r.favoriteTeam){
-      r.dayPhase=dayPhaseForMinute(r.journeyMinute);
-      persistSims();
-      renderFavoriteTeamJourney();
-      return;
-    }
-    revealCalendarMatch(r,next.match);
-  } else {
-    const split=splitAbsoluteMinute(boundary.abs);
-    r.calendarDayIndex=Math.min(ctx.days.length-1, split.dayIndex);
-    r.journeyMinute=boundary.minute;
-  }
-  r.dayPhase=dayPhaseForMinute(r.journeyMinute);
-  persistSims();
-  renderFavoriteTeamJourney();
 }
 function observerMatchesAfterFavorite(sim, favoriteMatches){
   const last=favoriteMatches[favoriteMatches.length-1];
@@ -440,7 +416,7 @@ function journeyVisibleContext(record){
   const dayWatched=dayMatches.length>0 && dayMatches.every(m=>hasWatchedMatch(record,m));
   const previousDayMatches=days.slice(0,calendarDayIndex).flatMap(d=>d.matches);
   const watchedCalendarMatches=allTournamentMatches(sim).filter(m=>hasWatchedMatch(record,m));
-  const cupCalendarDone=calendarDayIndex>=days.length-1 && dayWatched;
+  const cupCalendarDone=allTournamentMatches(sim).every(m=>hasWatchedMatch(record,m));
   const favoriteJourneyDone=revealed>=matches.length;
   const watchMatches=observerMatchesAfterFavorite(sim, matches);
   const watchIndex=Math.max(0, Math.min(record.watchIndex||0, watchMatches.length));
@@ -515,13 +491,6 @@ function renderCalendarDayCard(ctx, type){
   const dayNo=calendarDayIndex+1;
   const totalDays=days.length || 1;
   const advance=appState.clockAdvance;
-  const boundary=nextPeriodBoundaryAbs(calendarDayIndex, journeyMinute);
-  const nextPending=matchesWithAbsoluteMinutes(days)
-    .filter(x=>!hasWatchedMatch(activeRecord(),x.match))
-    .filter(x=>x.abs>=absoluteJourneyMinute(calendarDayIndex,journeyMinute) && x.abs<boundary.abs)[0];
-  const advanceLabel=nextPending
-    ? `Avançar até ${nextPending.match.time}`
-    : boundary.dayIndex>calendarDayIndex ? "Avançar até 05:00" : `Avançar até ${formatJourneyMinute(boundary.minute)}`;
   return `<div class="journey-hero-card guided-card rounded-[2rem] p-4 sm:p-5 guided-enter ${finished&&ctx.sim.champion===team?'confetti-soft':''}">
     <div class="flex items-center justify-between gap-4">
       ${renderSimulationTypeBadge(type)}
@@ -545,7 +514,7 @@ function renderCalendarDayCard(ctx, type){
           <div id="journeyClock" class="font-display font-extrabold text-3xl tnum">${formatJourneyMinute(journeyMinute)}</div>
         </div>
         <div class="text-right text-xs font-extrabold text-slate-500">
-          ${advance?`Avançou de ${formatJourneyMinute(advance.from)} para ${formatJourneyMinute(advance.to%1440)}`:`Próximo corte: ${advanceLabel.replace("Avançar até ","")}`}
+          ${advance?`Avançou de ${formatJourneyMinute(advance.from)} para ${formatJourneyMinute(advance.to%1440)}`:dayPhase==="morning"?"Período diurno":"Período noturno"}
         </div>
       </div>
       <div class="journey-clock-track mt-3"><span style="width:${Math.max(0, Math.min(100, (journeyMinute/1440)*100))}%"></span></div>
@@ -573,10 +542,7 @@ function renderCalendarDayCard(ctx, type){
             ? `<button class="glass rounded-2xl px-5 py-3.5 font-extrabold text-slate-500 opacity-70 cursor-not-allowed">${ic('flag','w-4 h-4')} Jogue sua partida para encerrar o dia</button>`
             : appState.autoAdvancing
                 ? `<button id="pauseAutoAdvance" class="glass rounded-2xl px-5 py-3.5 font-extrabold text-slate-600 flex items-center justify-center gap-2">${ic('pause','w-4 h-4')} Pausar avanço</button>`
-                : `<div class="grid grid-cols-[1fr_auto] gap-2">
-                     <button id="advanceJourneyClock" class="btn-premium text-white font-extrabold rounded-2xl px-5 py-3.5">${ic('fast-forward','w-4 h-4')} ${advanceLabel}</button>
-                     <button id="autoAdvanceClock" class="glass rounded-2xl px-4 py-3.5 font-extrabold text-slate-600 flex items-center gap-1.5" title="Avançar automaticamente pela Copa">${ic('play-circle','w-4 h-4')} Automático</button>
-                   </div>`}
+                : `<button id="autoAdvanceClock" class="btn-premium text-white font-extrabold rounded-2xl px-5 py-3.5 flex items-center justify-center gap-2">${ic('play-circle','w-4 h-4')} Avançar automaticamente</button>`}
     </div>
     ${savedSimsPanel()}
     <button id="resetGuidedSmall" class="mt-3 text-xs font-extrabold text-slate-400 hover:text-usared">Reiniciar progresso desta simulação</button>
@@ -712,7 +678,7 @@ function journeyNewsItems(ctx){
     const dayPool = ctx.dayPhase==="morning"
       ? baseDayPool.filter(m=>!hasWatchedMatch(activeRecord(),m) && parseMatchMinute(m.time)>=ctx.journeyMinute)
       : baseDayPool.filter(m=>hasWatchedMatch(activeRecord(),m));
-    const fallbackPool = dayPool.length ? dayPool : baseDayPool;
+    const fallbackPool = ctx.dayPhase==="morning" ? (dayPool.length ? dayPool : baseDayPool) : dayPool;
     const dm1=pickMatch(fallbackPool,0), dm2=pickMatch(fallbackPool,1), dm3=pickMatch(fallbackPool,2), dm4=pickMatch(fallbackPool,3), dm5=pickMatch(fallbackPool,4);
     const training = trainingNewsForOffDay(team, ctx);
     if(ctx.dayPhase==="morning"){
@@ -886,8 +852,58 @@ function wireJourneyNewsCarousel(){
     lastTick=now;
   }, 80);
 }
+function renderNextFavoriteScouting(ctx){
+  const nextFav=nextFavoriteCalendarMatch(ctx);
+  if(!nextFav){
+    return `<div class="rounded-2xl bg-slate-100/80 border border-white/70 p-3 text-sm font-extrabold text-slate-500">Sem próximo jogo pendente da sua seleção.</div>`;
+  }
+  const match=nextFav.match;
+  const opponent=match.home===ctx.team ? match.away : match.home;
+  const daysLeft=daysBetweenISO(ctx.currentDay.dateISO, match.dateISO);
+  const lineup=window.WC_LINEUPS?.buildLineup?.(opponent);
+  const starters=(lineup?.starters || []).map(p=>p.name).slice(0,11);
+  const compactPlayerName=name=>{
+    const parts=String(name||"").trim().split(/\s+/).filter(Boolean);
+    if(parts.length<=1) return parts[0] || "";
+    return `${parts[0][0]}. ${parts[parts.length-1]}`;
+  };
+  const gk=starters[0];
+  const outfield=starters.slice(1,11);
+  return `<div class="rounded-3xl bg-mxgreen/10 border border-mxgreen/20 p-4">
+    <div class="flex items-start justify-between gap-3">
+      <div>
+        <div class="text-[10px] uppercase tracking-widest font-extrabold text-mxgreen">Próximo jogo</div>
+        <div class="mt-1 font-display font-extrabold text-xl leading-tight">${flag(match.home)} ${match.home} <span class="text-slate-400 px-1">x</span> ${flag(match.away)} ${match.away}</div>
+      </div>
+      <div class="text-right shrink-0">
+        <div class="text-xs font-extrabold text-slate-700 tnum">${match.dateLabel}</div>
+        <div class="text-[11px] font-bold text-slate-500">${daysLeft===0?"É hoje":`Faltam ${daysLeft} dia${daysLeft===1?"":"s"}`}${match.time?` · ${match.time}`:""}</div>
+      </div>
+    </div>
+    <div class="mt-3 grid sm:grid-cols-2 gap-2 text-xs">
+      <div class="rounded-2xl bg-white/65 border border-white/70 p-2.5">
+        <div class="uppercase tracking-widest font-extrabold text-slate-400 text-[9px]">Local</div>
+        <div class="mt-1 font-extrabold text-slate-700">${match.venue || "Estádio a definir"}</div>
+        <div class="text-slate-500 font-semibold">${match.city || matchScheduleLine(match)}</div>
+      </div>
+      <div class="rounded-2xl bg-white/65 border border-white/70 p-2.5">
+        <div class="uppercase tracking-widest font-extrabold text-slate-400 text-[9px]">Adversário</div>
+        <div class="mt-1 font-extrabold text-slate-700">${flag(opponent)} ${opponent}</div>
+        <div class="text-slate-500 font-semibold">${TEAMS[opponent]?.shape || "Esquema indefinido"} · ${TEAMS[opponent]?.coach || "técnico a definir"}</div>
+      </div>
+    </div>
+    <div class="mt-3 rounded-2xl bg-white/65 border border-white/70 p-3">
+      <div class="text-[9px] uppercase tracking-widest font-extrabold text-slate-400">Provável escalação do adversário</div>
+      <div class="mt-2 text-xs font-semibold text-slate-600 leading-relaxed">
+        ${gk?`<b>GK:</b> ${gk}<br>`:""}
+        ${outfield.length?outfield.map(compactPlayerName).join(" · "):"Escalação provável ainda indisponível."}
+      </div>
+    </div>
+  </div>`;
+}
 function renderJourneySituation(ctx){
   const {team, revealed, dayPhase, nextMatch, partialGroup, groupMatches, revealedMatches, observerMode, nextWatchMatch, lastWatchMatch, watchIndex, watchMatches, sim}=ctx;
+  const nextScouting=renderNextFavoriteScouting(ctx);
   if(observerMode){
     const m = dayPhase==="morning" ? nextWatchMatch : lastWatchMatch;
     return `<div class="journey-hero-card guided-card rounded-[2rem] p-4 guided-enter">
@@ -907,6 +923,7 @@ function renderJourneySituation(ctx){
         <div class="mt-2 text-sm font-semibold text-slate-500">A simulação já passou por todos os jogos restantes.</div>
       </div>`}
       <div class="mt-3 text-xs font-extrabold text-slate-500">${Math.min(watchIndex, watchMatches.length)}/${watchMatches.length} jogo(s) restantes acompanhados depois da eliminação.</div>
+      <div class="mt-3">${nextScouting}</div>
       ${daySnapshotButtons()}
     </div>`;
   }
@@ -930,6 +947,7 @@ function renderJourneySituation(ctx){
         </div>
         <div class="mt-3 text-sm font-semibold text-slate-500">${matchScheduleLine(nextMatch)}</div>
       </div>
+      <div class="mt-3">${nextScouting}</div>
       ${partialGroup?`<div class="mt-3">${compactGroupCard(partialGroup, team)}</div>`:""}
       ${daySnapshotButtons()}
     </div>`;
@@ -944,6 +962,7 @@ function renderJourneySituation(ctx){
         <span class="text-[11px] font-extrabold text-slate-400">${partialGroup.played}/3 rodadas</span>
       </div>
       ${compactGroupCard(partialGroup, team)}
+      <div class="mt-3">${nextScouting}</div>
       <p class="mt-3 text-xs font-semibold text-slate-500">${dayPhase==="night"?"Resultados do dia já entraram na classificação parcial.":"A tabela acompanha apenas o que já foi revelado na jornada."}</p>
       ${daySnapshotButtons()}
     </div>`;
@@ -967,6 +986,7 @@ function renderJourneySituation(ctx){
         <div class="mt-1 font-extrabold text-sm leading-tight">${flag(nextMatch.home)} ${nextMatch.home} <span class="px-1.5 text-slate-400">x</span> ${flag(nextMatch.away)} ${nextMatch.away}</div>
       </div>`:""}
     </div>
+    <div class="mt-3">${nextScouting}</div>
     ${daySnapshotButtons()}
   </div>`;
 }
@@ -986,12 +1006,19 @@ function renderGuided(html, shellTone="", transitionTone="", shellStyle=""){
   $("#guidedExperience").innerHTML = `<section class="guided-shell ${shellTone} ${transitionTone}" style="${shellStyle}"><div class="guided-sky-fade" aria-hidden="true"></div><div class="guided-celestial" aria-hidden="true"></div><div class="guided-content">${html}</div></section>`;
   paintIcons();
 }
+function normalizeSearchText(value){
+  return String(value||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase();
+}
 function renderTeamPickerIntro(){
   appState.view="picker-team";
   const hasSims=appState.sims.length>0;
   const teams=getAllTeamsFromSimulation();
-  const q=(appState.teamSearch||"").trim().toLowerCase();
-  const filtered=teams.filter(t=>!q || t.toLowerCase().includes(q) || teamMeta[t].confederation.toLowerCase().includes(q) || teamMeta[t].status.toLowerCase().includes(q));
+  const q=normalizeSearchText(appState.teamSearch).trim();
+  const matchesTeamSearch=team=>{
+    const meta=teamMeta[team];
+    return !q || normalizeSearchText(`${team} ${meta.confederation} ${meta.status} ${meta.keyPlayers.join(" ")}`).includes(q);
+  };
+  const filtered=teams.filter(matchesTeamSearch);
   renderGuided(`
     ${renderIntroNav("team-picker")}
     <div class="max-w-7xl mx-auto grid lg:grid-cols-[.85fr_1.15fr] gap-6 items-start">
@@ -1018,11 +1045,11 @@ function renderTeamPickerIntro(){
             <i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400"></i>
             <input id="teamSearchInput" value="${appState.teamSearch||''}" placeholder="Buscar por seleção, confederação ou status" class="w-full rounded-2xl glass px-10 py-3 text-sm font-semibold outline-none" />
           </div>
-          <div class="text-xs text-slate-400 font-bold">${filtered.length} seleções</div>
+          <div id="teamSearchCount" class="text-xs text-slate-400 font-bold">${filtered.length} seleções</div>
         </div>
         <div id="teamPickerGrid" class="grid sm:grid-cols-2 xl:grid-cols-3 gap-3 max-h-[68vh] overflow-y-auto pr-1">
           ${filtered.map((team,i)=>`
-            <button class="team-pick-card text-left rounded-3xl p-4 glass ${appState.draftTeam===team?'active':''} guided-stagger" style="--i:${i%18}" data-team="${team}">
+            <button class="team-pick-card text-left rounded-3xl p-4 glass ${appState.draftTeam===team?'active':''} guided-stagger" style="--i:${i%18}" data-team="${team}" data-search="${normalizeSearchText(`${team} ${teamMeta[team].confederation} ${teamMeta[team].status} ${teamMeta[team].keyPlayers.join(" ")}`)}">
               <div class="flex items-start justify-between gap-3">
                 <div class="flex items-center gap-3 min-w-0">
                   ${flag(team,'flag-lg')}
@@ -1038,10 +1065,25 @@ function renderTeamPickerIntro(){
         </div>
       </div>
     </div>`);
-  $("#teamSearchInput").oninput=e=>{ appState.teamSearch=e.target.value; renderTeamPickerIntro(); };
+  $("#teamSearchInput").oninput=e=>{
+    appState.teamSearch=e.target.value;
+    const q=normalizeSearchText(appState.teamSearch).trim();
+    let visible=0;
+    document.querySelectorAll("#teamPickerGrid [data-team]").forEach((card,idx)=>{
+      const show=!q || (card.dataset.search||"").includes(q);
+      card.classList.toggle("hidden", !show);
+      if(show){
+        visible++;
+        card.style.setProperty("--i", String(Math.min(idx,18)));
+      }
+    });
+    if($("#teamSearchCount")) $("#teamSearchCount").textContent=`${visible} seleç${visible===1?"ão":"ões"}`;
+  };
   document.querySelectorAll("#teamPickerGrid [data-team]").forEach(card=>card.onclick=()=>{
     appState.draftTeam=card.dataset.team;
-    renderTeamPickerIntro();
+    document.querySelectorAll("#teamPickerGrid [data-team]").forEach(c=>c.classList.toggle("active", c===card));
+    const continueBtn=$("#continueTeamPick");
+    if(continueBtn) continueBtn.disabled=false;
   });
   $("#continueTeamPick").onclick=()=>{
     if(!appState.draftTeam) return;
@@ -1114,46 +1156,41 @@ function runAutoAdvance(){
   if(ctx.finished || ctx.canPlayFavoriteToday){ pauseAutoAdvance(); return; }
 
   const fromAbs=absoluteJourneyMinute(r.calendarDayIndex, r.journeyMinute);
-  const all=matchesWithAbsoluteMinutes(ctx.days);
+  const all=matchesWithAbsoluteMinutes(ctx.days).filter(x=>!hasWatchedMatch(r,x.match) && x.abs>=fromAbs);
   const fav=r.favoriteTeam;
+  const nextOther=all.find(x=>x.match.home!==fav && x.match.away!==fav);
+  const nextFav=all.find(x=>x.match.home===fav || x.match.away===fav);
+  if(!nextOther && !nextFav){ pauseAutoAdvance(); return; }
+  const event = (!nextOther || (nextFav && nextFav.abs<=nextOther.abs))
+    ? {type:"favorite", ...nextFav}
+    : {type:"match", ...nextOther};
 
-  const next=all.find(x=>x.abs>fromAbs && !hasWatchedMatch(r,x.match) && x.match.home!==fav && x.match.away!==fav);
-  const favNext=all.find(x=>x.abs>fromAbs && !hasWatchedMatch(r,x.match) && (x.match.home===fav || x.match.away===fav));
-
-  if(!next || (favNext && favNext.abs<=next.abs)){
-    const jumpTo=favNext||null;
-    autoAnimateSky(r.calendarDayIndex, r.journeyMinute, jumpTo?jumpTo.dayIndex:r.calendarDayIndex, jumpTo?jumpTo.minute:r.journeyMinute, 1100, ()=>{
-      if(!appState.autoAdvancing) return;
-      if(jumpTo){
-        r.calendarDayIndex=jumpTo.dayIndex; r.journeyMinute=jumpTo.minute;
-        r.dayPhase=dayPhaseForMinute(jumpTo.minute); persistSims();
-      }
-      appState.autoAdvancing=false;
-      if(_autoRafId){ cancelAnimationFrame(_autoRafId); _autoRafId=null; }
-      if(appState.autoAdvanceTimer){ clearTimeout(appState.autoAdvanceTimer); appState.autoAdvanceTimer=null; }
-      renderFavoriteTeamJourney();
-    });
-    return;
-  }
-
-  autoAnimateSky(r.calendarDayIndex, r.journeyMinute, next.dayIndex, next.minute, 700, ()=>{
+  autoAnimateSky(r.calendarDayIndex, r.journeyMinute, event.dayIndex, event.minute, 700, ()=>{
     if(!appState.autoAdvancing) return;
-    const prevDay=r.calendarDayIndex;
-    r.calendarDayIndex=next.dayIndex; r.journeyMinute=next.minute;
-    r.dayPhase=dayPhaseForMinute(next.minute);
-    revealCalendarMatch(r, next.match); persistSims();
+    const previousDay=r.calendarDayIndex;
+    r.calendarDayIndex=event.dayIndex;
+    r.journeyMinute=event.minute;
+    r.dayPhase=dayPhaseForMinute(event.minute);
 
-    const afterBanner=()=>{
+    if(event.type==="favorite"){
+      appState.autoAdvancing=false;
+      persistSims();
+      renderFavoriteTeamJourney();
+      return;
+    }
+
+    revealCalendarMatch(r, event.match);
+    persistSims();
+    updateAutoAdvanceClock(event.minute);
+    const continueAuto=()=>{
       if(!appState.autoAdvancing) return;
       appState.autoAdvanceTimer=setTimeout(runAutoAdvance, 120);
     };
-
-    if(r.calendarDayIndex!==prevDay){
+    if(previousDay!==event.dayIndex){
       renderFavoriteTeamJourney();
-      appState.autoAdvanceTimer=setTimeout(()=>{ if(appState.autoAdvancing) showAutoAdvanceBanner(next.match, afterBanner); }, 100);
+      appState.autoAdvanceTimer=setTimeout(()=>showAutoAdvanceBanner(event.match, continueAuto), 100);
     } else {
-      updateAutoAdvanceClock(next.minute);
-      showAutoAdvanceBanner(next.match, afterBanner);
+      showAutoAdvanceBanner(event.match, continueAuto);
     }
   });
 }
@@ -1204,15 +1241,22 @@ function showAutoAdvanceBanner(match, onComplete){
   b.innerHTML=`<div class="auto-advance-bar ${barClass}"></div>
     <div class="auto-advance-result">
       <span class="auto-advance-team">${flag(match.home)} <b>${match.home}</b></span>
-      <span class="auto-advance-score">${match.ga}<span style="margin:0 8px;opacity:.5">×</span>${match.gb}</span>
+      <span class="auto-advance-score" data-final-score="${match.ga} × ${match.gb}">0<span style="margin:0 8px;opacity:.5">×</span>0</span>
       <span class="auto-advance-team"><b>${match.away}</b> ${flag(match.away)}</span>
     </div>`;
   container.style.position="relative";
   container.appendChild(b);
+  const score=b.querySelector(".auto-advance-score");
+  appState.autoAdvanceTimer=setTimeout(()=>{
+    if(score){
+      score.classList.add("is-final");
+      score.textContent=score.dataset.finalScore || `${match.ga} × ${match.gb}`;
+    }
+  }, 520);
   appState.autoAdvanceTimer=setTimeout(()=>{
     b.classList.add("is-out");
     setTimeout(()=>{ b.remove(); onComplete(); }, 420);
-  }, 1650);
+  }, 1850);
 }
 
 function renderFavoriteTeamJourney(){
@@ -1286,7 +1330,6 @@ function renderFavoriteTeamJourney(){
     const idx=matchFavoriteIndex(match, matches);
     openMatchSimulator(match, idx>=0 ? idx : -1);
   });
-  if($("#advanceJourneyClock")) $("#advanceJourneyClock").onclick=advanceJourneyClock;
   if($("#autoAdvanceClock")) $("#autoAdvanceClock").onclick=startAutoAdvance;
   if($("#pauseAutoAdvance")) $("#pauseAutoAdvance").onclick=pauseAutoAdvance;
   if($("#startJourney")) $("#startJourney").onclick=()=>{ if(matches[revealed] && !finished) openTacticPlanner(matches[revealed], revealed); };
