@@ -6,12 +6,10 @@ const { TEAMS, GROUPS, THIRD_PLACE_MAP } = window.WC_DATA;
 const CALENDAR = window.WC_CALENDAR || null;
 const LINEUPS = window.WC_LINEUPS || null;
 
-// Contexto do MODO TÉCNICO. Quando setado por simulate(), os jogos da
-// seleção favorita usam um RNG ISOLADO (seed = managerSeed+idx+tática) e
-// aplicam os deltas de ataque/defesa da escalação. Assim o resultado da
-// favorita é função pura de (seed pedido, tática) — estável e reproduzível —
-// e NÃO consome o RNG global do torneio, mantendo o resto do mundo intacto.
-let MANAGER = null;
+// Seleções anfitriãs da Copa 2026 — recebem bônus de jogar em casa
+const HOST_NATIONS = new Set(["Estados Unidos","México","Canadá"]);
+// Bônus de OVR efetivo para anfitriãs (+2 ≈ 1–2 posições no ranking)
+const HOST_ADVANTAGE_OVR = 2;
 
 /* =================================================================
    MOTOR DE SIMULAÇÃO
@@ -19,62 +17,51 @@ let MANAGER = null;
 
 function teamObj(name){ const t = TEAMS[name]; return {name, ...t}; }
 
-// escolhe artilheiro ponderado pelo peso de gol do elenco
-function pickScorer(team){
-  const cands = team.sq.filter(p=>p[2] > 0);
+// escolhe artilheiro ponderado pelo peso de gol do elenco (exclui suspensos)
+function pickScorer(team, suspended=null){
+  const cands = team.sq.filter(p=>p[2]>0 && (!suspended || !suspended.has(p[0])));
+  if(!cands.length){
+    const fallback = team.sq.filter(p=>p[1]!=="GK" && (!suspended || !suspended.has(p[0])));
+    return fallback.length ? fallback[Math.floor(RND()*fallback.length)] : team.sq.find(p=>p[1]!=="GK") || team.sq[0];
+  }
   const total = cands.reduce((s,p)=>s+p[2],0);
   let r = RND()*total;
   for(const p of cands){ r -= p[2]; if(r<=0) return p; }
   return cands[cands.length-1];
 }
-function pickAssister(team, scorerName){
-  const cands = team.sq.filter(p=>p[1]!=="GK" && p[0]!==scorerName);
+function pickAssister(team, scorerName, suspended=null){
+  const cands = team.sq.filter(p=>p[1]!=="GK" && p[0]!==scorerName && (!suspended || !suspended.has(p[0])));
   if(!cands.length) return null;
   const total = cands.reduce((s,p)=>s+p[2]+0.5,0);
   let r = RND()*total;
   for(const p of cands){ r -= (p[2]+0.5); if(r<=0) return p[0]; }
   return cands[0][0];
-}
-// versões restritas a quem está EM CAMPO (Set de nomes) — para o modo gerenciado,
-// onde só titulares/jogadores que entraram marcam (nunca quem está no banco).
-function pickScorerFrom(team, onField){
-  const cands = team.sq.filter(p=>p[2] > 0 && onField.has(p[0]));
-  if(!cands.length) return pickScorer(team);
-  const total = cands.reduce((s,p)=>s+p[2],0);
-  let r = RND()*total;
-  for(const p of cands){ r -= p[2]; if(r<=0) return p; }
-  return cands[cands.length-1];
-}
-function pickAssisterFrom(team, scorerName, onField){
-  const cands = team.sq.filter(p=>p[1]!=="GK" && p[0]!==scorerName && onField.has(p[0]));
-  if(!cands.length) return null;
-  const total = cands.reduce((s,p)=>s+p[2]+0.5,0);
-  let r = RND()*total;
-  for(const p of cands){ r -= (p[2]+0.5); if(r<=0) return p[0]; }
-  return cands[0][0];
-}
-// 1 gol no minuto dado, com autor/assistência tirados apenas de quem está em campo
-function oneGoalFrom(team, minute, onField){
-  const scorer = pickScorerFrom(team, onField);
-  const type = pick(GOAL_TYPES);
-  const assist = (type==="de pênalti"||type==="cobrança de falta") ? null
-    : (RND()<0.62 ? pickAssisterFrom(team, scorer[0], onField) : null);
-  return {minute, player:scorer[0], team:team.name, type, assist};
 }
 
 // gera lista de gols (autor, minuto, time, tipo) para um time
-function makeGoals(team, n, extra=false){
+function makeGoals(team, n, extra=false, suspended=null){
   const goals = [];
   for(let i=0;i<n;i++){
     const minute = extra ? (91 + rint(30)) : (1 + rint(90));
-    const stop = (!extra && minute>=90) ? "" : "";
-    const scorer = pickScorer(team);
+    const scorer = pickScorer(team, suspended);
     const type = pick(GOAL_TYPES);
     const assist = (type==="de pênalti"||type==="cobrança de falta") ? null
-                  : (RND()<0.62 ? pickAssister(team, scorer[0]) : null);
+                  : (RND()<0.62 ? pickAssister(team, scorer[0], suspended) : null);
     goals.push({minute, player:scorer[0], team:team.name, type, assist});
   }
   return goals;
+}
+
+// gera cartões amarelos para um time em uma partida (0–2 por time)
+function generateMatchYellows(teamName){
+  const team = teamObj(teamName);
+  const outfield = team.sq.filter(p=>p[1]!=="GK");
+  if(!outfield.length) return [];
+  const r=RND();
+  const count = r<0.15 ? 2 : r<0.55 ? 1 : 0;
+  if(!count) return [];
+  const pool = outfield.slice().sort(()=>RND()-0.5);
+  return pool.slice(0, count).map(p=>({ player:p[0], minute: 1+Math.floor(RND()*90) }));
 }
 
 // ---- Disputa de pênaltis detalhada (cobrança a cobrança) ----
@@ -129,143 +116,58 @@ function buildShootout(homeName, awayName, winnerHome, seed){
     kicks:[{order:1,team:winnerHome?homeName:awayName,player:penTakers(winnerHome?A:B)[0],scored:true,shotZone:"top-right",result:"Gol",decisive:true}] };
 }
 
-// mantém só os `cap` gols mais cedo (teto de placar no tempo normal)
-function capGoals(list, cap){
-  if(list.length<=cap) return list;
-  return list.slice().sort((a,b)=>a.minute-b.minute).slice(0,cap);
-}
-// delta de rating vigente no minuto t (último ponto da timeline com from<=t)
-function deltaAt(timeline, t){
-  let cur = timeline[0] || {att:0, def:0};
-  for(const p of timeline){ if(p.from<=t) cur=p; else break; }
-  return cur;
-}
-// minuto -> Set(nomes em campo) da favorita, aplicando as trocas do roteiro ao vivo
-function onFieldTimeline(tactic){
-  const start = new Set(tactic.starters||[]);
-  const subs = (tactic.liveScript||[]).filter(e=>e.type==="sub" && e.out && e.in)
-    .slice().sort((a,b)=>(a.minute|0)-(b.minute|0));
-  return t=>{
-    const field = new Set(start);
-    for(const s of subs){ if((s.minute|0)<=t){ field.delete(s.out); field.add(s.in); } }
-    return field;
-  };
-}
-
-// ---- via BASELINE (comportamento original, RNG global) p/ jogos sem técnico ----
-function computeBaselineResult(A, B, chaos, knockout, vIndex){
-  const base=1.1;
-  const diff=(A.ovr - B.ovr);
-  const noiseA=Math.exp((RND()-0.5)*2*chaos);
-  const noiseB=Math.exp((RND()-0.5)*2*chaos);
-  const xgA=clamp(base*Math.exp(diff/15)*noiseA, 0.12, 3.35);
-  const xgB=clamp(base*Math.exp(-diff/15)*noiseB, 0.12, 3.35);
-  let gaReg=Math.min(5, poisson(xgA));
-  let gbReg=Math.min(5, poisson(xgB));
-  let gaExt=0, gbExt=0, aet=false, pens=null, penalties=null;
-  if(knockout && gaReg===gbReg){
-    aet=true;
-    gaExt=Math.min(2, poisson(clamp(xgA*0.32, 0.05, 1.2)));
-    gbExt=Math.min(2, poisson(clamp(xgB*0.32, 0.05, 1.2)));
-    if(gaReg+gaExt === gbReg+gbExt){
-      const winnerHome=RND() < (0.5 + (A.ovr - B.ovr)/120);
-      const seed=((vIndex*2654435761) ^ ((A.ovr*73856093)>>>0) ^ ((B.ovr*19349663)>>>0)) >>> 0;
-      penalties=buildShootout(A.name, B.name, winnerHome, seed);
-      pens=[penalties.homeScore, penalties.awayScore];
-    }
-  }
-  const goals=[
-    ...makeGoals(A, gaReg, false), ...makeGoals(A, gaExt, true),
-    ...makeGoals(B, gbReg, false), ...makeGoals(B, gbExt, true),
-  ].sort((x,y)=> x.minute - y.minute);
-  return {ga:gaReg+gaExt, gb:gbReg+gbExt, aet, pens, penalties, goals};
-}
-
-// ---- via GERENCIADA (RNG isolado por SETUP + deltas da escalação, minuto a minuto) ----
-// `idx` = posição do jogo na jornada da favorita (chave da tática). Gera gols
-// minuto a minuto num fluxo contínuo cujo seed depende só do SETUP de kickoff
-// (formação/XI/capitão/postura). Como o delta de cada minuto vem da timeline,
-// uma troca no minuto M só altera de M em diante — minutos anteriores ficam
-// idênticos (prefixo estável p/ substituição ao vivo). Autores saem apenas de
-// quem está em campo no minuto (nunca jogadores do banco).
-function computeManagedResult(A, B, chaos, knockout, vIndex, favSide, tactic, managerSeed, idx){
-  const fav = favSide==="home" ? A : B;
-  const opp = favSide==="home" ? B : A;
-  const timeline = LINEUPS.ratingTimeline(fav.name, tactic);
-  const seed = LINEUPS.matchSetupSeed(managerSeed, idx, tactic);
-  const base=1.1;
-  const favField = onFieldTimeline(tactic);                                   // favorita: respeita as trocas
-  const oppField = new Set((LINEUPS.buildLineup(opp.name)?.starters || []).map(p=>p.name)); // oponente: XI base
-  const saved=RND;
-  RND = mulberry32(seed);                       // RNG isolado, contínuo (prefixo estável)
-  try{
-    const noiseF=Math.exp((RND()-0.5)*2*chaos); // "sorte" base do jogo (fixa p/ o setup)
-    const noiseO=Math.exp((RND()-0.5)*2*chaos);
-    const favGoals=[], oppGoals=[];
-    const tick=(t, perMin, cap)=>{
-      const d=deltaAt(timeline, t-1);
-      const attFav=fav.ovr + d.att, defFav=fav.ovr + d.def;
-      const xgF=clamp(perMin*Math.exp((attFav-opp.ovr)/15)*noiseF, 0, cap);
-      const xgO=clamp(perMin*Math.exp((opp.ovr-defFav)/15)*noiseO, 0, cap);
-      if(RND() < xgF) favGoals.push(oneGoalFrom(fav, t, favField(t)));
-      if(RND() < xgO) oppGoals.push(oneGoalFrom(opp, t, oppField));
-    };
-    for(let t=1;t<=90;t++) tick(t, base/90, 0.22);   // tempo normal
-    let favReg=capGoals(favGoals, 6), oppReg=capGoals(oppGoals, 6);
-    let favTot=favReg.length, oppTot=oppReg.length;
-    let aet=false, pens=null, penalties=null;
-    let favExt=[], oppExt=[];
-    if(knockout && favTot===oppTot){
-      aet=true;
-      const before=favGoals.length, beforeO=oppGoals.length;
-      for(let t=91;t<=120;t++) tick(t, base*0.32/30, 0.18);   // prorrogação
-      favExt=capGoals(favGoals.slice(before), 3);
-      oppExt=capGoals(oppGoals.slice(beforeO), 3);
-      favTot+=favExt.length; oppTot+=oppExt.length;
-      if(favTot===oppTot){
-        const last=timeline[timeline.length-1] || {att:0, def:0};
-        const blend=(last.att + last.def)/2;       // postura final pesa nos pênaltis
-        const winnerFav=RND() < clamp(0.5 + ((fav.ovr+blend) - opp.ovr)/120, 0.12, 0.88);
-        const winnerHome=favSide==="home" ? winnerFav : !winnerFav;
-        const shSeed=((vIndex*2654435761) ^ ((A.ovr*73856093)>>>0) ^ ((B.ovr*19349663)>>>0) ^ (seed>>>0)) >>> 0;
-        penalties=buildShootout(A.name, B.name, winnerHome, shSeed);
-        pens=[penalties.homeScore, penalties.awayScore];
-      }
-    }
-    const goals=[...favReg, ...oppReg, ...favExt, ...oppExt].sort((x,y)=> x.minute - y.minute);
-    const ga = favSide==="home" ? favTot : oppTot;
-    const gb = favSide==="home" ? oppTot : favTot;
-    return {ga, gb, aet, pens, penalties, goals};
-  } finally {
-    RND = saved;                                // restaura o RNG global do torneio
-  }
-}
-
-// simula uma partida (chaos controla a variância/zebras).
-// Se a favorita do MANAGER está em campo, usa a via gerenciada (tática + RNG isolado).
-function playMatch(homeName, awayName, stage, chaos, knockout=false, vIndex=0, calendarEntry=null){
+// simula uma partida (chaos controla a variância/zebras)
+// suspended: Set de nomes de jogadores suspensos por acúmulo de amarelos
+// moraleA/moraleB: multiplicador de moral (1.0 = neutro; 0.85–1.15)
+function playMatch(homeName, awayName, stage, chaos, knockout=false, vIndex=0, calendarEntry=null, suspended=null, moraleA=1, moraleB=1){
   const A = teamObj(homeName), B = teamObj(awayName);
-  let res, favManaged=null;
-  const mgr=MANAGER;
-  if(mgr && (homeName===mgr.favoriteTeam || awayName===mgr.favoriteTeam)){
-    const favSide = homeName===mgr.favoriteTeam ? "home" : "away";
-    const idx = mgr.favCounter++;             // ordem de criação == ordem da jornada
-    const tactic = mgr.tactics[idx] || (mgr.autoCache[mgr.favoriteTeam] || (mgr.autoCache[mgr.favoriteTeam]=LINEUPS.autoTactic(mgr.favoriteTeam)));
-    res = computeManagedResult(A, B, chaos, knockout, vIndex, favSide, tactic, mgr.seed, idx);
-    favManaged = {side:favSide, tactic, idx};
-  } else {
-    res = computeBaselineResult(A, B, chaos, knockout, vIndex);
+  const base = 1.1;
+  // OVR efetivo: anfitriãs recebem +2 pontos de força quando jogam em casa
+  const effOvrA = A.ovr + (HOST_NATIONS.has(homeName) ? HOST_ADVANTAGE_OVR : 0);
+  const effOvrB = B.ovr + (HOST_NATIONS.has(awayName) ? HOST_ADVANTAGE_OVR : 0);
+  const diff = effOvrA - effOvrB;
+  // gols esperados modulados por força + ruído (chaos) + moral (clamped para evitar extremos)
+  const mA = clamp(moraleA, 0.88, 1.12);
+  const mB = clamp(moraleB, 0.88, 1.12);
+  const noiseA = Math.exp((RND()-0.5)*2*chaos);
+  const noiseB = Math.exp((RND()-0.5)*2*chaos);
+  let xgA = clamp(base * Math.exp(diff/15) * noiseA * mA, 0.12, 3.35);
+  let xgB = clamp(base * Math.exp(-diff/15) * noiseB * mB, 0.12, 3.35);
+  // gols do tempo regulamentar
+  let gaReg = Math.min(5, poisson(xgA));
+  let gbReg = Math.min(5, poisson(xgB));
+  let gaExt = 0, gbExt = 0, aet = false, pens = null, penalties = null;
+
+  if(knockout && gaReg===gbReg){
+    // prorrogação (gols com minuto 91–120)
+    aet = true;
+    gaExt = Math.min(2, poisson(clamp(xgA*0.32, 0.05, 1.2)));
+    gbExt = Math.min(2, poisson(clamp(xgB*0.32, 0.05, 1.2)));
+    if(gaReg+gaExt === gbReg+gbExt){
+      // o vencedor dos pênaltis é decidido pelo RNG global (1 sorteio, ponderado
+      // pela força); os detalhes cobrança-a-cobrança vêm de um PRNG local.
+      const winnerHome = RND() < (0.5 + (effOvrA - effOvrB)/120);
+      const seed = ((vIndex*2654435761) ^ ((A.ovr*73856093)>>>0) ^ ((B.ovr*19349663)>>>0)) >>> 0;
+      penalties = buildShootout(homeName, awayName, winnerHome, seed);
+      pens = [penalties.homeScore, penalties.awayScore];
+    }
   }
+
+  const ga = gaReg + gaExt, gb = gbReg + gbExt;
+  // minutos coerentes: gols normais em 1–90, gols de prorrogação em 91–120
+  const finalGoals = [
+    ...makeGoals(A, gaReg, false, suspended), ...makeGoals(A, gaExt, true, suspended),
+    ...makeGoals(B, gbReg, false, suspended), ...makeGoals(B, gbExt, true, suspended),
+  ].sort((x,y)=> x.minute - y.minute);
+
   const v = VENUES[vIndex % VENUES.length];
   const match = {
-    stage, home:homeName, away:awayName, ga:res.ga, gb:res.gb, aet:res.aet, pens:res.pens, penalties:res.penalties,
-    score:`${res.ga}-${res.gb}`,
+    stage, home:homeName, away:awayName, ga, gb, aet, pens, penalties,
+    score:`${ga}-${gb}`,
     venue:v[0], city:v[1],
-    goals: res.goals,
+    goals: finalGoals,
     ovrA:A.ovr, ovrB:B.ovr,
   };
-  // marca o jogo gerenciado p/ attachMatchPersonnel montar o XI/trocas do técnico
-  if(favManaged){ match.favoriteSide=favManaged.side; match.favoriteTactic=favManaged.tactic; match.favoriteJourneyIndex=favManaged.idx; }
   if(CALENDAR) CALENDAR.apply(match, calendarEntry);
   if(LINEUPS) LINEUPS.attachMatchPersonnel(match);
   return match;
@@ -277,23 +179,66 @@ const RR = [ [[0,1],[2,3]], [[0,2],[3,1]], [[0,3],[1,2]] ];
 function simulateGroup(letter, teams, chaos, vStart){
   const matches=[];
   let vi=vStart;
-  const fixtures = CALENDAR?.groupByLetter?.[letter];
-  if(fixtures?.length){
+
+  // --- Acúmulo de cartões amarelos e moral por rodada ---
+  const yellowCount={};   // playerName → nº de amarelos acumulados
+  const morale={};        // teamName   → multiplicador (1.0 = neutro)
+  teams.forEach(t=>{ morale[t]=1.0; });
+
+  const getSuspended=()=>new Set(Object.entries(yellowCount).filter(([,c])=>c>=2).map(([n])=>n));
+
+  const applyYellows=(teamName)=>{
+    const yellows=generateMatchYellows(teamName);
+    yellows.forEach(y=>{ yellowCount[y.player]=(yellowCount[y.player]||0)+1; });
+    return yellows;
+  };
+
+  const updateMorale=(teamName, won, drew)=>{
+    if(won)      morale[teamName]=clamp(morale[teamName]*1.06, 0.85, 1.15);
+    else if(drew) morale[teamName]=clamp(morale[teamName]*1.01, 0.85, 1.15);
+    else          morale[teamName]=clamp(morale[teamName]*0.94, 0.85, 1.15);
+  };
+
+  const playRound=(fixtures)=>{
+    const suspended=getSuspended();
     fixtures.forEach(fixture=>{
-      const m = playMatch(fixture.home, fixture.away, `Grupo ${letter} · Rodada ${fixture.round}`, chaos, false, vi++, fixture);
-      m.round = fixture.round; m.group = letter;
+      const mA=morale[fixture.home]||1, mB=morale[fixture.away]||1;
+      const m=playMatch(fixture.home, fixture.away, fixture.stage||`Grupo ${letter} · Rodada ${fixture.round}`, chaos, false, vi++, fixture, suspended, mA, mB);
+      m.round=fixture.round; m.group=letter;
+
+      // Gera cartões amarelos desta partida e registra no match
+      const homeYellows=applyYellows(fixture.home);
+      const awayYellows=applyYellows(fixture.away);
+      m.yellows=[
+        ...homeYellows.map(y=>({...y,team:fixture.home})),
+        ...awayYellows.map(y=>({...y,team:fixture.away}))
+      ].sort((a,b)=>a.minute-b.minute);
+
+      // Atualiza moral para o próximo confronto
+      const homeWon=m.ga>m.gb, awayWon=m.gb>m.ga;
+      updateMorale(fixture.home, homeWon, !homeWon&&!awayWon);
+      updateMorale(fixture.away, awayWon, !homeWon&&!awayWon);
+
       matches.push(m);
     });
+  };
+
+  const calFixtures=CALENDAR?.groupByLetter?.[letter];
+  if(calFixtures?.length){
+    // Agrupa por rodada e processa sequencialmente (rounds 1, 2, 3)
+    const byRound={};
+    calFixtures.forEach(f=>{ (byRound[f.round]=byRound[f.round]||[]).push({...f,stage:`Grupo ${letter} · Rodada ${f.round}`}); });
+    [1,2,3].forEach(r=>{ if(byRound[r]) playRound(byRound[r]); });
   } else {
     RR.forEach((round, ri)=>{
-      round.forEach(([h,a])=>{
-        const fixture = CALENDAR?.groupFixture?.(letter, teams[h], teams[a]);
-        const m = playMatch(teams[h], teams[a], `Grupo ${letter} · Rodada ${ri+1}`, chaos, false, vi++, fixture);
-        m.round = ri+1; m.group = letter;
-        matches.push(m);
+      const roundFixtures=round.map(([h,a])=>{
+        const fixture=CALENDAR?.groupFixture?.(letter, teams[h], teams[a]);
+        return {...(fixture||{}), home:teams[h], away:teams[a], round:ri+1, stage:`Grupo ${letter} · Rodada ${ri+1}`};
       });
+      playRound(roundFixtures);
     });
   }
+
   // tabela
   const st = {};
   teams.forEach(t=> st[t]={team:t, P:0,J:0,V:0,E:0,D:0,GP:0,GC:0,FP:0});
@@ -308,7 +253,7 @@ function simulateGroup(letter, teams, chaos, vStart){
   const table = Object.values(st).map(r=>({...r, SG:r.GP-r.GC, ovr:TEAMS[r.team].ovr}))
     .sort(sortOfficialRows);
   table.forEach((r,i)=> r.pos=i+1);
-  return {letter, teams, matches, table};
+  return {letter, teams, matches, table, finalMorale: {...morale}};
 }
 
 function fairPlayScore(){
@@ -327,23 +272,21 @@ function slotFromRow(r, tier){
   return {team:r.team, group:r.group||r.letter, P:r.P, SG:r.SG, GP:r.GP, FP:r.FP, ovr:r.ovr, tier};
 }
 
-function simulate(seed, chaos, name, tone, simOptions=null){
+function simulate(seed, chaos, name, tone){
   RND = mulberry32(seed);
-
-  // contexto do MODO TÉCNICO (favCounter reinicia a cada simulate, inclusive
-  // nas tentativas do resample de proteção de ranking).
-  MANAGER = (simOptions && simOptions.favoriteTeam && LINEUPS) ? {
-    favoriteTeam: simOptions.favoriteTeam,
-    tactics: simOptions.tactics || {},
-    seed: (simOptions.managerSeed>>>0) || (seed>>>0),
-    favCounter: 0,
-    autoCache: {},
-  } : null;
 
   // ---- fase de grupos ----
   const groups = [];
   let vStart=0;
-  GROUPS.forEach(([L,ts])=>{ const g=simulateGroup(L,ts,chaos,vStart); vStart+=6; g.table.forEach(r=>r.group=L); groups.push(g); });
+  const teamMorale = {}; // moral acumulada de cada time vinda dos grupos (usada no mata-mata)
+  GROUPS.forEach(([L,ts])=>{
+    const g=simulateGroup(L,ts,chaos,vStart);
+    vStart+=6;
+    g.table.forEach(r=>r.group=L);
+    // Herda moral final do grupo para o mata-mata
+    if(g.finalMorale) Object.assign(teamMorale, g.finalMorale);
+    groups.push(g);
+  });
 
   // ---- classificados ----
   const firsts = groups.map(g=>({...g.table[0], group:g.letter, tier:0}));
@@ -390,12 +333,17 @@ function simulate(seed, chaos, name, tone, simOptions=null){
   let vi = 80;
   const byMatch = {};
   function playKnockMatch(id, A, B, label, stageIdx){
-    const m = playMatch(A.team, B.team, label, chaos, true, vi++, CALENDAR?.knockoutFixture?.(id));
+    const mA=clamp(teamMorale[A.team]||1, 0.88, 1.12);
+    const mB=clamp(teamMorale[B.team]||1, 0.88, 1.12);
+    const m = playMatch(A.team, B.team, label, chaos, true, vi++, CALENDAR?.knockoutFixture?.(id), null, mA, mB);
     m.matchNo = id; m.A=A; m.B=B; m.stageIdx=stageIdx;
     m.topSeedRule = topSeedRuleFor(A.team, B.team, stageIdx, protectedTopSeedTeams);
     const aWin = (m.ga>m.gb) || (m.pens && m.pens[0]>m.pens[1]);
     m.winner = aWin? A: B; m.loser = aWin? B: A;
     setReach(A.team, stageIdx); setReach(B.team, stageIdx);
+    // Atualiza moral: vencedores recebem boost pós-classificação
+    teamMorale[m.winner.team]=clamp((teamMorale[m.winner.team]||1)*1.07, 0.85, 1.18);
+    teamMorale[m.loser.team]=1.0; // eliminado, não afeta mais nada
     byMatch[id] = m;
     return m;
   }
@@ -597,15 +545,13 @@ function simulate(seed, chaos, name, tone, simOptions=null){
   };
 }
 
-function simulateWithRankingProtection(seed, chaos, name, tone, simOptions=null){
+function simulateWithRankingProtection(seed, chaos, name, tone){
   let attempt = 0;
   let resolvedSeed = seed >>> 0;
   let sim = null;
   const maxAttempts = 90;
-  // managerSeed fixo = seed PEDIDO, p/ os jogos da favorita não cascatearem no resample.
-  const opts = simOptions ? {...simOptions, managerSeed:(simOptions.managerSeed ?? seed)>>>0} : null;
   while(attempt < maxAttempts){
-    sim = simulate(resolvedSeed, chaos, name, tone, opts);
+    sim = simulate(resolvedSeed, chaos, name, tone);
     if(!sim.topSeedProtection.violations.length) break;
     attempt++;
     // Salto determinístico: a mesma seed inicial sempre cai no mesmo cenário válido.
