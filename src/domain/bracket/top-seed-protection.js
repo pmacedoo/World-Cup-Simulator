@@ -19,7 +19,10 @@ const FIFA_FINAL_ONLY_PAIRS = new Set([
 function topSeedRuleFor(teamA, teamB, stageIdx, protectedTeams){
   const A = FIFA_TOP4_BY_TEAM[teamA], B = FIFA_TOP4_BY_TEAM[teamB];
   if(!A || !B) return null;
-  if(!protectedTeams?.has(teamA) || !protectedTeams?.has(teamB)) return null;
+  // Os 4 melhores do ranking são mantidos separados SEMPRE — independe de terem
+  // vencido o grupo. Antes a regra só valia quando ambos eram líderes de grupo,
+  // o que deixava Espanha×Argentina (e França×Inglaterra) caírem nos 32-avos
+  // quando um deles terminava em 2º. O resample agora rejeita esses cruzamentos.
   const finalOnly = FIFA_FINAL_ONLY_PAIRS.has(pairKey(teamA,teamB));
   const minStageIdx = finalOnly ? 5 : 4;
   return {
