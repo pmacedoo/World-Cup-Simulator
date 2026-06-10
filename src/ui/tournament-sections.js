@@ -2,7 +2,7 @@
 
 import { TEAMS } from "../data/worldcup-data.js";
 import { currentSim } from "../state/simulation-store.js";
-import { $, el, flag, ic, matchScheduleLine, rowDot, scoreLine, statusBadge } from "./render-helpers.js";
+import { $, UI, cx, el, flag, ic, matchScheduleLine, rowDot, scoreLine, statusBadge } from "./render-helpers.js";
 const POS_LABEL = {GK:"GOL",DF:"DEF",MF:"MEI",FW:"ATA"};
 function teamSquadDetails(team){
   const t = TEAMS[team];
@@ -91,7 +91,7 @@ function goalChips(m){
 function matchCard(m){
   const aWin=m.ga>m.gb, bWin=m.gb>m.ga;
   return `<div class="glass rounded-2xl p-4 shadow-glass">
-    <div class="flex items-center justify-between text-[11px] text-slate-400 font-bold uppercase tracking-wider mb-2">
+    <div class="${cx("flex items-center justify-between mb-2", UI.label11)}">
       <span>${m.matchNo?`M${m.matchNo} · `:''}${m.stage}</span><span class="font-semibold normal-case tracking-normal">${matchScheduleLine(m)}</span>
     </div>
     <div class="flex items-center justify-center gap-3 sm:gap-5">

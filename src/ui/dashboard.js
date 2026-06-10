@@ -7,7 +7,7 @@ import { teamMeta } from "../domain/teams/team-meta.js";
 import { getTeamMatches, groupRowForTeam } from "../domain/matches/match-queries.js";
 import { profileFor } from "../state/simulation-profiles.js";
 import { activeRecord, appState, currentSim, deleteSimulation, setActiveSimulation, simObjFor, timeAgo } from "../state/simulation-store.js";
-import { $, el, flag, getFavoriteTeam, ic, matchScheduleLine, paintIcons, renderSimulationTypeBadge, renderSimulationTypeControls, scoreLine, uiConfirm, zebraTeam } from "./render-helpers.js";
+import { $, UI, cx, el, flag, getFavoriteTeam, ic, matchScheduleLine, paintIcons, renderSimulationTypeBadge, renderSimulationTypeControls, scoreLine, uiConfirm, zebraTeam } from "./render-helpers.js";
 import { campaignSummary, progressiveCampaign, statusPill } from "./journey/journey-components.js";
 import { changeFavoriteTeam, changeSimulationType, renderFavoriteTeamJourney, resetGuidedExperience, startNewSimulation } from "./journey/journey-screens.js";
 import { openMatchSimulator } from "./match/match-simulator.js";
@@ -60,10 +60,10 @@ function renderHeroCards(){
   const wrap = $("#heroCards");
   wrap.innerHTML = "";
   cards.forEach(card => {
-    wrap.appendChild(el("div", `glass card-hover rounded-3xl p-5 shadow-glass bg-gradient-to-br ${card.accent}`,
-      `<div class="flex items-center gap-2 text-slate-500 text-xs font-bold uppercase tracking-wider">${ic(card.icon, `w-[18px] h-[18px] ${card.color}`)}${card.label}</div>
-       <div class="font-display font-extrabold text-xl mt-2 leading-tight flex items-center gap-2">${card.main}</div>
-       <div class="text-sm text-slate-500 mt-0.5 flex items-center gap-1.5">${card.sub}</div>`));
+    wrap.appendChild(el("div", cx("glass card-hover rounded-3xl p-5 shadow-glass bg-gradient-to-br", card.accent),
+      `<div class="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-500">${ic(card.icon, `w-[18px] h-[18px] ${card.color}`)}${card.label}</div>
+       <div class="mt-2 flex items-center gap-2 font-display text-xl font-extrabold leading-tight">${card.main}</div>
+       <div class="mt-0.5 flex items-center gap-1.5 text-sm text-slate-500">${card.sub}</div>`));
   });
   $("#simMeta").textContent = `Seed ${sim.seed} · variância ${Math.round(sim.chaos * 100)}% · ${sim.tone}`;
 }
@@ -142,7 +142,7 @@ function renderFavoriteTeamDashboard(){
           <div class="flex items-center gap-4">
             ${flag(team, 'flag-xl')}
             <div>
-              <div class="text-[11px] uppercase tracking-widest font-extrabold text-slate-400">Minha Seleção</div>
+              <div class="${UI.label11}">Minha Seleção</div>
               <h3 class="font-display font-extrabold text-3xl">${team}</h3>
               <div class="mt-1 flex flex-wrap gap-2 items-center">${renderSimulationTypeBadge(type)} ${statusPill(meta.status)}</div>
             </div>
@@ -175,7 +175,7 @@ function renderFavoriteTeamDashboard(){
       <div class="reveal glass rounded-[2rem] p-4 sm:p-5 shadow-glass">
         <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
           <div>
-            <div class="text-[11px] uppercase tracking-widest font-extrabold text-slate-400">Jornada</div>
+            <div class="${UI.label11}">Jornada</div>
             <div class="font-display font-extrabold text-2xl">Partidas de ${team}</div>
           </div>
           <button id="dashStartJourney" class="btn-premium text-white font-bold px-4 py-2.5 rounded-2xl">Voltar à jornada</button>

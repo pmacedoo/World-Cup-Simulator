@@ -15,7 +15,7 @@ import { getMatchWinnerTeam } from "../../domain/matches/match-queries.js";
 import { WC_LINEUPS } from "../../engine/lineups.js";
 import { profileFor } from "../../state/simulation-profiles.js";
 import { activeRecord, appState, currentSim, markMatchRevealed, setMatchTactic } from "../../state/simulation-store.js";
-import { $, el, flag, getFavoriteTeam, ic, matchScheduleLine, paintIcons, renderSimulationTypeBadge, scoreLine, uiConfirm } from "../render-helpers.js";
+import { $, UI, cx, el, flag, getFavoriteTeam, ic, matchScheduleLine, paintIcons, renderSimulationTypeBadge, scoreLine, uiConfirm } from "../render-helpers.js";
 import { markCalendarMatchWatched } from "../journey/journey-context.js";
 import { renderFavoriteTeamJourney } from "../journey/journey-screens.js";
 import { closeModal } from "../bracket.js";
@@ -332,7 +332,7 @@ function updateMatchPrimaryAction(match){
     btn.innerHTML = "Voltar à jornada";
     btn.onclick = () => { closeMatchSimulator(); renderFavoriteTeamJourney(); };
   } else {
-    btn.className = "glass rounded-2xl px-4 py-2.5 font-bold text-slate-700 flex items-center gap-1.5";
+    btn.className = cx("glass rounded-2xl px-4 py-2.5 font-bold text-slate-700", "flex items-center gap-1.5");
     btn.innerHTML = `${ic('fast-forward','w-4 h-4')} Pular`;
     btn.onclick = () => uiConfirm("Pular a transmissão e mostrar o resultado final?", () => skipMatchSimulation(match));
     paintIcons();
@@ -347,7 +347,7 @@ function openMatchSimulator(match, journeyIndex = 0){
   if(!modal){
     modal = el("div", "fixed inset-0 z-[80] hidden items-center justify-center p-3 sm:p-5");
     modal.id = "matchSimulator";
-    modal.innerHTML = `<div class="absolute inset-0 bg-ink/55 backdrop-blur-xl" data-close></div>
+    modal.innerHTML = `<div class="${UI.overlay}" data-close></div>
       <div id="matchSimulatorBox" class="relative guided-card rounded-[2rem] shadow-lift w-full max-w-5xl max-h-[94vh] overflow-y-auto p-4 sm:p-6 swap" role="dialog" aria-modal="true" aria-label="Transmissão da partida"></div>`;
     document.body.appendChild(modal);
     modal.addEventListener("click", e => { if(e.target.dataset.close !== undefined) closeMatchSimulator(); });

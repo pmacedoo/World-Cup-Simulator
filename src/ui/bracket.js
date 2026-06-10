@@ -11,7 +11,7 @@
    ================================================================= */
 
 import { currentSim } from "../state/simulation-store.js";
-import { $, el, flag, ic, matchScheduleLine, paintIcons, scoreLine } from "./render-helpers.js";
+import { $, UI, cx, el, flag, ic, matchScheduleLine, paintIcons, scoreLine } from "./render-helpers.js";
 import { goalChips, renderRankingProtection } from "./tournament-sections.js";
 
 // rótulo de origem do slot nos 16-avos: 1A / 2B / 3C...
@@ -139,7 +139,7 @@ function renderBracket(){
 
 function knockoutDetailCard(title, match){
   return `<div class="glass card-hover rounded-3xl p-5 shadow-glass">
-    <div class="text-[11px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">${title} · ${match.kickoff || match.city}</div>
+    <div class="${cx("flex items-center gap-1.5", UI.label11)}">${title} · ${match.kickoff || match.city}</div>
     <div class="flex items-center justify-center gap-3 sm:gap-5 mt-3">
       <div class="flex-1 min-w-0 text-right font-display font-extrabold text-lg flex items-center justify-end gap-2 ${match.winner.team === match.home ? '' : 'text-slate-400'}"><span class="truncate">${match.home}</span> ${flag(match.home)}</div>
       <div class="px-3 py-1 rounded-xl bg-ink text-white font-extrabold tnum text-lg">${scoreLine(match)}</div>
@@ -162,8 +162,8 @@ function openMatchModal(match){
     modal.addEventListener("click", e => { if(e.target.dataset.close !== undefined) closeModal(); });
   }
   $("#modalBox").innerHTML = `
-    <button class="absolute top-4 right-4 text-slate-400 hover:text-ink" data-close aria-label="Fechar">✕</button>
-    <div class="text-[11px] font-bold uppercase tracking-wider text-slate-400">${match.stage}</div>
+    <button class="${UI.modalClose}" data-close aria-label="Fechar">✕</button>
+    <div class="${UI.label11}">${match.stage}</div>
     <div class="flex items-center justify-center gap-4 mt-3">
       <div class="flex-1 min-w-0 text-right font-display font-extrabold text-xl truncate ${match.winner && match.winner.team === match.home ? '' : 'text-slate-400'}">${match.home} ${flag(match.home)}</div>
       <div class="px-3 py-1.5 rounded-xl bg-ink text-white font-extrabold tnum text-xl">${scoreLine(match)}</div>

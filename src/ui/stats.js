@@ -2,7 +2,7 @@
 
 import { currentSim } from "../state/simulation-store.js";
 import { narrativeFor } from "../app/narrative.js";
-import { $, flag, ic, scoreLine } from "./render-helpers.js";
+import { $, UI, flag, ic, scoreLine } from "./render-helpers.js";
 function renderNarrative(){
   const s=currentSim();
   const n=narrativeFor(s);
@@ -16,7 +16,7 @@ function renderNarrative(){
   ];
   $("#narrative").innerHTML = blocks.map((b,i)=>`
     <div class="reveal glass card-hover rounded-3xl p-6 shadow-glass bg-gradient-to-br ${b[2]} ${i===5?'lg:col-span-2':''} ${i===0?'lg:col-span-3':''}">
-      <div class="text-[11px] font-bold uppercase tracking-widest text-slate-400 mb-2">${b[0]}</div>
+      <div class="${UI.label11} mb-2">${b[0]}</div>
       <p class="text-[15px] leading-relaxed text-slate-700">${b[1]}</p>
     </div>`).join("");
 }
@@ -81,8 +81,8 @@ function renderStats(){
     </div>
     <div class="reveal grid sm:grid-cols-2 gap-4 lg:col-span-3">
       ${facts.map(f=>`<div class="glass card-hover rounded-2xl p-4 shadow-glass">
-        <div class="text-[11px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">${ic(f[0],`w-4 h-4 ${f[1]}`)} ${f[2]}</div>
-        <div class="font-display font-extrabold text-lg mt-1 flex items-center gap-2 flex-wrap">${f[3]}</div>
+        <div class="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-slate-400">${ic(f[0],`w-4 h-4 ${f[1]}`)} ${f[2]}</div>
+        <div class="mt-1 flex flex-wrap items-center gap-2 font-display text-lg font-extrabold">${f[3]}</div>
         <div class="text-[13px] text-slate-500">${f[4]}</div></div>`).join("")}
     </div>`;
 }

@@ -8,7 +8,7 @@
 
 import { daysBetweenISO, parseMatchMinute } from "../../domain/matches/match-queries.js";
 import { activeRecord, appState } from "../../state/simulation-store.js";
-import { $, flag, ic, renderSimulationTypeBadge, scoreLine } from "../render-helpers.js";
+import { $, UI, cx, flag, ic, renderSimulationTypeBadge, scoreLine } from "../render-helpers.js";
 import { canRevealMatchTeams, getNextVisibleMatch, getSpoilerSafeOpponent, hasWatchedMatch, periodInfoForMinute } from "./journey-context.js";
 import { renderJourneyNews } from "./journey-news.js";
 import { calendarMatchAction, daySnapshotButtons, renderCampaignProgressHeader, renderJourneyActionButtons, renderJourneyClockPanel, renderJourneySituation } from "./journey-components.js";
@@ -24,6 +24,9 @@ const MOBILE_JOURNEY_TABS = [
 
 let journeyLayoutIsMobile = null;
 let journeyResizeTimer = null;
+
+const MOBILE_PANEL = "mobile-journey-panel-inner no-scroll";
+const MOBILE_EMPTY = "rounded-2xl bg-white/70 border border-white/75 p-4 text-sm font-semibold text-slate-500";
 
 function setJourneyLayoutIsMobile(isMobile){ journeyLayoutIsMobile = isMobile; }
 
@@ -70,16 +73,16 @@ function renderMobileJourneyFooter(active){
 function renderMobileCampaignPanel(ctx, matches, revealed){
   const team = ctx.team;
   const shown = matches.slice(0, revealed);
-  return `<div class="mobile-journey-panel-inner no-scroll">
+  return `<div class="${MOBILE_PANEL}">
     <div class="guided-card rounded-[2rem] p-4 guided-enter">
       <div class="mb-4">
         ${renderCampaignProgressHeader(team, matches, revealed)}
       </div>
       <div class="journey-scroll-list mobile-campaign-list space-y-2">
         ${shown.length ? shown.map(m => `<div class="rounded-2xl bg-white/70 border border-white/75 p-3">
-          <div class="text-[10px] uppercase tracking-widest font-extrabold text-slate-400">${m.stage}${m.matchNo ? ` · M${m.matchNo}` : ""}</div>
+          <div class="${UI.label10}">${m.stage}${m.matchNo ? ` · M${m.matchNo}` : ""}</div>
           <div class="mt-1 font-extrabold text-sm leading-tight">${flag(m.home)} ${m.home} <span class="tnum px-1.5">${scoreLine(m)}</span> ${flag(m.away)} ${m.away}</div>
-        </div>`).join("") : `<div class="rounded-2xl bg-white/70 border border-white/75 p-4 text-sm font-semibold text-slate-500">A campanha ainda não tem jogos revelados.</div>`}
+        </div>`).join("") : `<div class="${MOBILE_EMPTY}">A campanha ainda não tem jogos revelados.</div>`}
         <div class="scroll-affordance">Mais jogos abaixo</div>
       </div>
       <div class="mobile-scroll-hint">Role para ver mais</div>
@@ -89,11 +92,11 @@ function renderMobileCampaignPanel(ctx, matches, revealed){
 
 function renderMobileCalendarPanel(ctx){
   const {team, currentDay, dayMatches, journeyMinute} = ctx;
-  return `<div class="mobile-journey-panel-inner no-scroll">
+  return `<div class="${MOBILE_PANEL}">
     <div class="guided-card rounded-[2rem] p-4 guided-enter">
       <div class="flex items-center justify-between gap-3 mb-4">
         <div>
-          <div class="text-[11px] uppercase tracking-widest font-extrabold text-slate-400">Jogos do dia</div>
+          <div class="${UI.label11}">Jogos do dia</div>
           <h2 class="font-display font-extrabold text-2xl">${currentDay.dateLabel || "Calendário"}</h2>
         </div>
         ${ic('calendar-days','w-6 h-6 text-usablue')}
@@ -116,7 +119,7 @@ function renderMobileCalendarPanel(ctx){
               <div class="flex-none">${calendarMatchAction(ctx, m)}</div>
             </div>
           </div>`;
-        }).join("") : `<div class="rounded-2xl bg-white/70 border border-white/75 p-4 text-sm font-semibold text-slate-500">Nenhum jogo previsto para este dia.</div>`}
+        }).join("") : `<div class="${MOBILE_EMPTY}">Nenhum jogo previsto para este dia.</div>`}
         <div class="scroll-affordance">Mais jogos abaixo</div>
       </div>
       <div class="mobile-scroll-hint">Role para ver mais</div>
@@ -128,7 +131,7 @@ function renderMobileCalendarPanel(ctx){
 function renderMobileNextFavoriteCard(ctx){
   const nextFav = getNextVisibleMatch(ctx);
   if(!nextFav){
-    return `<div class="rounded-2xl bg-slate-100/80 border border-white/70 p-3 text-xs font-extrabold text-slate-500">Sem próximo jogo pendente da sua seleção.</div>`;
+    return `<div class="rounded-2xl border border-white/70 bg-slate-100/80 p-3 text-xs font-extrabold text-slate-500">Sem próximo jogo pendente da sua seleção.</div>`;
   }
   const match = nextFav.match;
   const daysLeft = daysBetweenISO(ctx.currentDay.dateISO, match.dateISO);
@@ -136,7 +139,7 @@ function renderMobileNextFavoriteCard(ctx){
   const teamsLine = safe.canReveal
     ? `${flag(match.home)} ${match.home} <span class="text-slate-400 px-1">x</span> ${flag(match.away)} ${match.away}`
     : `${flag(ctx.team)} ${ctx.team} <span class="text-slate-400 px-1">x</span> <span class="text-slate-400 italic">${safe.label}</span>`;
-  return `<div class="rounded-2xl bg-mxgreen/10 border border-mxgreen/20 p-3">
+  return `<div class="rounded-2xl border border-mxgreen/20 bg-mxgreen/10 p-3">
     <div class="flex items-start justify-between gap-3">
       <div class="min-w-0">
         <div class="text-[9px] uppercase tracking-widest font-extrabold text-mxgreen">Próximo jogo</div>
@@ -157,15 +160,15 @@ function renderMobileGamePanel(ctx, type){
   const totalDays = days.length || 1;
   const highlightMatches = dayMatches.slice(0, 2);
   const period = periodInfoForMinute(journeyMinute);
-  return `<div class="mobile-journey-panel-inner no-scroll">
-    <div class="journey-hero-card guided-card rounded-[2rem] p-4 guided-enter ${finished && ctx.sim.champion === team ? 'confetti-soft' : ''}">
+  return `<div class="${MOBILE_PANEL}">
+    <div class="${cx(UI.heroCard, finished && ctx.sim.champion === team && "confetti-soft")}">
       <div class="flex items-center justify-between gap-3">
         ${renderSimulationTypeBadge(type)}
         <span class="px-3 py-1.5 rounded-full text-[10px] uppercase tracking-widest font-extrabold ${period.tone === "night" ? 'bg-ink text-white' : 'bg-gold-500/15 text-gold-700'}">${period.label}</span>
       </div>
       <div class="mt-4 flex items-start justify-between gap-3">
         <div>
-          <div class="text-[10px] uppercase tracking-widest font-extrabold text-slate-400">Dia ${dayNo}/${totalDays}</div>
+          <div class="${UI.label10}">Dia ${dayNo}/${totalDays}</div>
           <h1 class="font-display font-extrabold text-2xl leading-tight">${currentDay.dateLabel}</h1>
           <p class="mt-1 text-xs text-slate-500 font-semibold">${flag(team)} ${team} · jornada da Copa</p>
         </div>
@@ -200,9 +203,9 @@ function renderMobileGamePanel(ctx, type){
 function journeyPanelDefinitions(ctx, type, matches, revealed){
   return MOBILE_JOURNEY_TABS.map(tab => {
     const html = tab.key === "news"
-      ? `<div class="mobile-journey-panel-inner no-scroll">${renderJourneyNews(ctx)}</div>`
+      ? `<div class="${MOBILE_PANEL}">${renderJourneyNews(ctx)}</div>`
       : tab.key === "table"
-        ? `<div class="mobile-journey-panel-inner no-scroll">${renderJourneySituation(ctx, {showScouting:false})}</div>`
+        ? `<div class="${MOBILE_PANEL}">${renderJourneySituation(ctx, {showScouting:false})}</div>`
         : tab.key === "calendar"
           ? renderMobileCalendarPanel(ctx)
           : tab.key === "campaign"
@@ -228,7 +231,7 @@ function renderMobileJourneyApp(ctx, type, matches, revealed){
   return `<div class="mobile-journey-app" data-active-index="${activeIndex}">
     <div class="mobile-journey-topbar">
       <div class="min-w-0 text-center">
-        <div class="text-[10px] uppercase tracking-widest font-extrabold text-slate-400">Jornada</div>
+        <div class="${UI.label10}">Jornada</div>
         <div id="mobileJourneyTitle" class="font-display font-extrabold text-xl leading-tight">${mobileJourneyTitle(active)}</div>
       </div>
     </div>

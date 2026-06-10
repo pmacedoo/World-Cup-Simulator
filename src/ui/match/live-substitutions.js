@@ -16,7 +16,7 @@ import { TEAMS } from "../../data/worldcup-data.js";
 import { WC_LINEUPS } from "../../engine/lineups.js";
 import { getTeamMatches } from "../../domain/matches/match-queries.js";
 import { activeRecord, appState, currentSim, setMatchTactic } from "../../state/simulation-store.js";
-import { $, getFavoriteTeam, ic, paintIcons } from "../render-helpers.js";
+import { $, UI, cx, getFavoriteTeam, ic, paintIcons } from "../render-helpers.js";
 import { FIELD_IMAGE_URL, POS_GROUPS } from "./lineup-editor.js";
 import { simulateMatch } from "./match-simulator.js";
 const LIVE_SUB_PER_WINDOW = 3;      // até 3 trocas na MESMA parada
@@ -316,7 +316,7 @@ function buildLiveSubCarousel(){
     <div class="flex items-center justify-between gap-3 mb-3">
       <button class="pos-carousel-btn" data-ls-dir="-1" aria-label="Posição anterior">${ic('chevron-left','w-4 h-4')}</button>
       <div class="text-center min-w-0">
-        <div class="text-[10px] uppercase tracking-widest font-extrabold text-slate-400 mb-0.5">Banco de reservas</div>
+        <div class="${cx(UI.label10, "mb-0.5")}">Banco de reservas</div>
         <div class="font-display font-extrabold text-lg leading-tight">${group.label}</div>
       </div>
       <button class="pos-carousel-btn" data-ls-dir="1" aria-label="Próxima posição">${ic('chevron-right','w-4 h-4')}</button>
@@ -371,8 +371,8 @@ function renderLiveSubPicker(){
       <div class="text-[11px] text-slate-400 font-semibold leading-snug px-1">${hint}</div>
       ${pendingHtml}
       <div class="flex gap-2 pt-1">
-        <button id="liveSubCancel" class="glass rounded-2xl px-4 py-2.5 font-bold text-slate-600 flex-none">${isHalftime ? 'Sem trocas' : 'Cancelar'}</button>
-        <button id="liveSubConfirm" class="btn-premium text-white rounded-2xl px-5 py-2.5 font-extrabold flex-1 ${(isHalftime || readyRows.length) ? '' : 'opacity-40 pointer-events-none'}">${isHalftime ? 'Continuar 2º tempo' : readyRows.length > 1 ? 'Confirmar ' + readyRows.length + ' trocas' : 'Confirmar troca'}</button>
+        <button id="liveSubCancel" class="${cx(UI.glassAction, "flex-none")}">${isHalftime ? 'Sem trocas' : 'Cancelar'}</button>
+        <button id="liveSubConfirm" class="${cx("btn-premium text-white rounded-2xl px-5 py-2.5 font-extrabold flex-1", !(isHalftime || readyRows.length) && "opacity-40 pointer-events-none")}">${isHalftime ? 'Continuar 2º tempo' : readyRows.length > 1 ? 'Confirmar ' + readyRows.length + ' trocas' : 'Confirmar troca'}</button>
       </div>
     </div>`;
   }
@@ -385,7 +385,7 @@ function renderLiveSubPicker(){
   const curFIdx = Math.max(0, formations.indexOf(tactic.formation || "4-3-3"));
   const formationBar = formations.length > 1 ? `
     <div class="ls-formation-selector mt-3">
-      <div class="text-[10px] uppercase tracking-widest font-extrabold text-slate-400 text-center mb-1.5">Esquema</div>
+      <div class="${cx(UI.label10, "text-center mb-1.5")}">Esquema</div>
       <div class="flex items-center gap-2 justify-center">
         <button class="pos-carousel-btn ls-form-dir" data-ls-form-dir="-1" aria-label="Esquema anterior">${ic('chevron-left','w-4 h-4')}</button>
         <span class="font-display font-extrabold text-xl min-w-[52px] text-center">${tactic.formation || "4-3-3"}</span>

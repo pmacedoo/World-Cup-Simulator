@@ -12,7 +12,7 @@ import { TEAMS } from "../../data/worldcup-data.js";
 import { WC_LINEUPS } from "../../engine/lineups.js";
 import { getTeamMatches } from "../../domain/matches/match-queries.js";
 import { activeRecord, currentSim, setDefaultTactic, setMatchTactic } from "../../state/simulation-store.js";
-import { $, el, flag, getFavoriteTeam, ic, paintIcons } from "../render-helpers.js";
+import { $, UI, cx, el, flag, getFavoriteTeam, ic, paintIcons } from "../render-helpers.js";
 import { renderFavoriteTeamJourney } from "../journey/journey-screens.js";
 import { openMatchSimulator } from "./match-simulator.js";
 
@@ -74,7 +74,7 @@ function openTacticPlanner(match, journeyIndex=0){
   if(!modal){
     modal = el("div","fixed inset-0 z-[80] hidden items-center justify-center p-3 sm:p-5");
     modal.id = "tacticPlanner";
-    modal.innerHTML = `<div class="absolute inset-0 bg-ink/55 backdrop-blur-xl" data-close></div>
+    modal.innerHTML = `<div class="${UI.overlay}" data-close></div>
       <div id="tacticPlannerBox" class="relative guided-card rounded-[2rem] shadow-lift w-full max-w-5xl max-h-[94vh] overflow-y-auto p-4 sm:p-6 swap" role="dialog" aria-modal="true" aria-label="Planejador tático"></div>`;
     document.body.appendChild(modal);
     modal.addEventListener("click", e=>{ if(e.target.dataset.close!==undefined) closeTacticPlanner(true); });
@@ -396,9 +396,9 @@ function positionBlock(group){
   const full = have===want;
   const countCls = full?"text-mxgreen bg-mxgreen/10":"text-amber-600 bg-amber-100";
   const players = plSquad().filter(p=>p[1]===group.pos).map(p=>p[0]).sort((a,b)=>plRank(b)-plRank(a));
-  return `<div>
+  return `<div class="lineup-position-block">
     <div class="flex items-center justify-between mb-2">
-      <div class="text-[11px] uppercase tracking-widest font-extrabold text-slate-400">${group.label}</div>
+      <div class="${UI.label11}">${group.label}</div>
       <div class="text-[11px] font-extrabold rounded-full px-2 py-0.5 ${countCls}">${have}/${want}</div>
     </div>
     <div class="lineup-scroll-shell">
@@ -413,7 +413,7 @@ function formationSelector(){
     <div class="flex items-center justify-between gap-3">
       <button type="button" class="pos-carousel-btn formation-cycle-btn" data-formation-dir="-1" title="Esquema anterior">${ic('chevron-left','w-4 h-4')}</button>
       <div class="text-center min-w-0">
-        <div class="text-[10px] uppercase tracking-widest font-extrabold text-slate-400">Esquema tático</div>
+        <div class="${UI.label10}">Esquema tático</div>
         <div class="font-display font-extrabold text-xl leading-tight">${current}</div>
       </div>
       <button type="button" class="pos-carousel-btn formation-cycle-btn" data-formation-dir="1" title="Próximo esquema">${ic('chevron-right','w-4 h-4')}</button>
@@ -430,7 +430,7 @@ function positionCarousel(){
     <div class="flex items-center justify-between gap-3 mb-3">
       <button class="pos-carousel-btn" data-dir="-1" title="Posição anterior">${ic('chevron-left','w-4 h-4')}</button>
       <div class="text-center min-w-0">
-        <div class="text-[10px] uppercase tracking-widest font-extrabold text-slate-400">Lista de jogadores</div>
+        <div class="${UI.label10}">Lista de jogadores</div>
         <div class="font-display font-extrabold text-lg leading-tight">${group.label}</div>
       </div>
       <button class="pos-carousel-btn" data-dir="1" title="Próxima posição">${ic('chevron-right','w-4 h-4')}</button>
@@ -478,7 +478,7 @@ function renderPlanner(){
   const coach = TEAMS[st.team].coach;
 
   box.innerHTML = `
-    <button class="absolute top-4 right-4 text-slate-400 hover:text-ink" data-close aria-label="Fechar planejador">✕</button>
+    <button class="${UI.modalClose}" data-close aria-label="Fechar planejador">✕</button>
     <div class="pr-8">
       <div class="text-[11px] uppercase tracking-widest font-extrabold text-usablue">${m.matchNo?`M${m.matchNo} · `:''}${m.stage} · você comanda</div>
       <div class="mt-1 font-display font-extrabold text-2xl sm:text-3xl flex flex-wrap items-center gap-2">
@@ -490,7 +490,7 @@ function renderPlanner(){
     </div>
 
     <div class="planner-workspace mt-5" data-planner-tab="${st.plannerTab || 'lineup'}">
-      <div class="planner-screen planner-lineup-screen planner-lineup-panel guided-card rounded-3xl p-4">
+      <div class="planner-screen planner-lineup-screen planner-lineup-panel ${UI.card}">
         <div class="flex items-center justify-between mb-3">
           <div class="flex items-center gap-2">
             <div class="font-display font-extrabold text-lg">Escalação atual</div>
@@ -501,22 +501,22 @@ function renderPlanner(){
           </div>
           <button id="autoLineup" class="text-xs font-extrabold text-usablue hover:underline flex items-center gap-1">${ic('wand-2','w-3.5 h-3.5')} Automática</button>
         </div>
-        ${st.error?`<div class="mb-3 rounded-2xl bg-usared/10 border border-usared/20 px-3 py-2 text-sm font-bold text-usared">${st.error}</div>`:""}
+        ${st.error?`<div class="planner-error mb-3 rounded-2xl bg-usared/10 border border-usared/20 px-3 py-2 text-sm font-bold text-usared">${st.error}</div>`:""}
         <div class="planner-lineup-field">
           ${renderLineupField()}
         </div>
-        <div class="mt-3">
+        <div class="planner-formation-section mt-3">
           ${formationSelector()}
         </div>
-        <div class="mt-3">
+        <div class="planner-player-section mt-3">
           ${positionCarousel()}
         </div>
       </div>
 
       <div class="planner-screen planner-tactic-screen planner-controls-panel">
         <div class="planner-control-grid">
-        <div class="guided-card rounded-3xl p-4">
-          <div class="text-[11px] uppercase tracking-widest font-extrabold text-slate-400 mb-2">Força vs escalação padrão</div>
+        <div class="${UI.card}">
+          <div class="${cx(UI.label11, "mb-2")}">Força vs escalação padrão</div>
           <div class="flex gap-2">
             ${deltaPill("Ataque", rating.attackDelta)}
             ${deltaPill("Defesa", rating.defenseDelta)}
@@ -524,8 +524,8 @@ function renderPlanner(){
           <p class="mt-2 text-[11px] text-slate-400 font-semibold leading-snug">Em equivalente de força. O padrão do seu time é 0/0; mudanças de XI, formação e postura movem a agulha.</p>
         </div>
 
-        <div class="guided-card rounded-3xl p-4">
-          <div class="text-[11px] uppercase tracking-widest font-extrabold text-slate-400 mb-2">Postura</div>
+        <div class="${UI.card}">
+          <div class="${cx(UI.label11, "mb-2")}">Postura</div>
           <div class="grid grid-cols-3 gap-2">
             ${MENTALITIES.map(mt=>`<button class="mentality-btn rounded-2xl px-2 py-2.5 text-center border ${mt.key===st.mentality?'bg-usablue text-white border-usablue':'glass text-slate-600 border-white/70'}" data-m="${mt.key}">
               <div class="flex justify-center mb-1">${ic(mt.icon,'w-4 h-4')}</div>
@@ -535,13 +535,13 @@ function renderPlanner(){
           </div>
         </div>
 
-        <div class="guided-card rounded-3xl p-4">
-          <div class="text-[11px] uppercase tracking-widest font-extrabold text-slate-400 mb-2">Capitão</div>
+        <div class="${UI.card}">
+          <div class="${cx(UI.label11, "mb-2")}">Capitão</div>
           <select id="captainSelect" class="w-full rounded-2xl border border-slate-200 px-3 py-2.5 font-bold text-sm">${captainOptions()}</select>
         </div>
 
-        <div class="planner-control-wide guided-card rounded-3xl p-4">
-          <div class="text-[11px] uppercase tracking-widest font-extrabold text-slate-400 mb-3">Cobradores</div>
+        <div class="planner-control-wide ${UI.card}">
+          <div class="${cx(UI.label11, "mb-3")}">Cobradores</div>
           <div class="grid grid-cols-1 gap-2.5">
             <label class="cobrador-row flex items-center gap-3">
               <span class="text-xs font-extrabold text-slate-500 w-24 shrink-0 flex items-center gap-1.5">${ic('circle-dot','w-3.5 h-3.5 text-usared flex-none')} Pênalti</span>
@@ -580,7 +580,7 @@ function renderPlanner(){
       <button id="cancelPlanner" class="glass rounded-2xl px-4 py-2.5 font-bold text-slate-600">Voltar</button>
       <div class="flex items-center gap-3">
         ${valid?'' : '<span class="text-xs font-extrabold text-amber-600">Complete o XI nas posições da formação</span>'}
-        <button id="confirmPlanner" class="btn-premium text-white font-extrabold rounded-2xl px-6 py-3 ${valid?'':'opacity-40 pointer-events-none'}">${ic('play','w-4 h-4')} Confirmar e jogar</button>
+        <button id="confirmPlanner" class="${cx("btn-premium text-white rounded-2xl px-6 py-3 font-extrabold", !valid && "opacity-40 pointer-events-none")}">${ic('play','w-4 h-4')} Confirmar e jogar</button>
       </div>
     </div>`;
 

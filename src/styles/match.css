@@ -648,8 +648,92 @@
   #tacticPlannerBox .planner-controls-panel{
     padding:10px !important;
   }
+  #tacticPlannerBox .planner-lineup-panel{
+    gap:0;
+    overflow:hidden;
+  }
+  #tacticPlannerBox .planner-error{
+    margin-bottom:8px !important;
+    padding:7px 10px !important;
+    border-radius:14px;
+    font-size:12px;
+    line-height:1.2;
+  }
   #tacticPlannerBox .planner-lineup-field{
+    flex:0 0 auto;
     min-height:0;
+  }
+  #tacticPlannerBox .planner-lineup-field .lineup-field-wrap{
+    height:clamp(126px,20dvh,152px);
+    aspect-ratio:auto;
+    border-radius:18px;
+  }
+  #tacticPlannerBox .planner-formation-section{
+    flex:0 0 auto;
+    margin-top:8px !important;
+  }
+  #tacticPlannerBox .planner-player-section{
+    flex:1 1 auto;
+    min-height:0;
+    margin-top:8px !important;
+    overflow:hidden;
+  }
+  #tacticPlannerBox .planner-player-section .lineup-player-carousel{
+    height:100%;
+    min-height:0;
+    display:flex;
+    flex-direction:column;
+    gap:6px;
+    padding:8px;
+  }
+  #tacticPlannerBox .planner-player-section .lineup-player-carousel > .flex:first-child{
+    flex:0 0 auto;
+    margin-bottom:4px !important;
+  }
+  #tacticPlannerBox .planner-player-section .lineup-player-carousel > .flex:nth-child(2){
+    flex:0 0 auto;
+    margin-bottom:4px !important;
+  }
+  #tacticPlannerBox .planner-player-section .lineup-player-carousel .lineup-scroll-shell{
+    flex:1 1 auto;
+    min-height:0;
+    overflow:hidden;
+  }
+  #tacticPlannerBox .planner-player-section .lineup-position-block{
+    flex:1 1 auto;
+    min-height:0;
+    display:flex;
+    flex-direction:column;
+    overflow:hidden;
+  }
+  #tacticPlannerBox .planner-player-section .lineup-position-block > .flex{
+    flex:0 0 auto;
+    margin-bottom:6px !important;
+  }
+  #tacticPlannerBox .planner-player-section .lineup-player-carousel .lineup-scroll-target{
+    max-height:none;
+    height:100%;
+    overflow-y:scroll;
+    scrollbar-gutter:stable;
+  }
+  #tacticPlannerBox .planner-player-section .lineup-player-carousel .lineup-scroll-target::after{
+    position:sticky;
+    bottom:0;
+    padding:3px 8px 0;
+  }
+  #tacticPlannerBox .formation-carousel{
+    padding:6px 10px;
+  }
+  #tacticPlannerBox .formation-carousel .font-display{
+    font-size:17px;
+    line-height:1;
+  }
+  #tacticPlannerBox .formation-carousel .pos-carousel-dot{
+    width:6px;
+    height:6px;
+  }
+  #tacticPlannerBox .formation-carousel .pos-carousel-dot.active{
+    width:18px;
   }
   #tacticPlannerBox .planner-control-grid{
     grid-template-columns:1fr 1fr;
@@ -752,7 +836,7 @@
   #tacticPlannerBox .planner-action-bar{
     margin-top:10px;
   }
-  .lineup-drop-slot{width:38px;height:38px;}
+  .lineup-drop-slot{width:34px;height:34px;}
   .lineup-field-player{padding:3px;text-align:center;}
   .lineup-pos{width:15px;height:15px;font-size:6px;left:-3px;top:-3px;}
   .lineup-captain{width:15px;height:15px;font-size:7px;right:-3px;bottom:-3px;}
@@ -763,6 +847,7 @@
   .lineup-surname.tiny,
   .lineup-main.tiny{font-size:5.4px;}
   .lineup-player-carousel .grid{max-height:150px;}
+  #tacticPlannerBox .planner-player-section .lineup-player-carousel .grid{max-height:none;}
   .lineup-player-carousel .planner-player{padding:6px 8px;}
 }
 
@@ -787,7 +872,7 @@
 @media(min-width:640px){
   #liveSubMount .ls-carousel-col > div{display:flex;flex-direction:column;flex:1;min-height:0;}
   #liveSubMount .ls-carousel-col .lineup-player-carousel{flex:1;min-height:0;display:flex;flex-direction:column;}
-  #liveSubMount .ls-carousel-col .lineup-scroll-shell{flex:1;min-height:0;overflow-y:auto;display:block;}
+  #liveSubMount .ls-carousel-col .lineup-scroll-shell{flex:1;min-height:0;overflow-y:scroll;scrollbar-gutter:stable;display:block;}
   /* a lista interna não rola sozinha (evita scrollbar duplo); o shell rola */
   #liveSubMount .ls-carousel-col .lineup-player-carousel .lineup-scroll-target{overflow:visible;min-height:0;}
 }
@@ -918,7 +1003,7 @@
   /* picker de substituição — empilha em coluna única e rola */
   .ls-planner-layout{grid-template-columns:1fr;}
   .ls-carousel-col{border-left:none;border-top:1px solid rgba(0,0,0,.06);}
-  #matchSimulatorBox #liveSubMount{overflow-y:auto;overflow-x:hidden;}
+  #matchSimulatorBox #liveSubMount{overflow-y:scroll;overflow-x:hidden;scrollbar-gutter:stable;}
   #matchSimulatorBox #liveSubMount .guided-card{height:auto;max-height:none;overflow:visible;}
   #matchSimulatorBox #liveSubMount .ls-planner-layout{height:auto;}
   #liveSubMount .ls-field-col{padding:8px !important;}
@@ -933,6 +1018,29 @@
   /* planejador tático */
   .lineup-field-wrap{height:220px !important;}
   .lineup-player-carousel{gap:6px;}
+  #tacticPlannerBox .planner-lineup-field .lineup-field-wrap{
+    height:clamp(126px,20dvh,152px) !important;
+  }
+  #tacticPlannerBox .planner-player-section .lineup-player-carousel{
+    height:100%;
+  }
+  #tacticPlannerBox .planner-player-section .lineup-scroll-shell{
+    flex:1 1 auto;
+    min-height:0;
+    overflow:hidden;
+  }
+  #tacticPlannerBox .planner-player-section .lineup-position-block{
+    flex:1 1 auto;
+    min-height:0;
+    display:flex;
+    flex-direction:column;
+    overflow:hidden;
+  }
+  #tacticPlannerBox .planner-player-section .lineup-scroll-target{
+    height:auto;
+    max-height:100% !important;
+    overflow-y:scroll;
+  }
   /* disputa de pênaltis */
   .pk-kick-row{gap:6px;}
 }

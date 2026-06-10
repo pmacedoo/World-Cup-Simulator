@@ -31,6 +31,25 @@ const ic = (name, cls = "") => `<i data-lucide="${name}" class="ico ${cls}"></i>
 // Converte todos os <i data-lucide> presentes no DOM em SVG
 function paintIcons(){ if(window.lucide && lucide.createIcons) lucide.createIcons(); }
 
+const cx = (...parts) => parts.flat(Infinity).filter(Boolean).join(" ");
+
+const UI = {
+  overlay: "absolute inset-0 bg-ink/55 backdrop-blur-xl",
+  modalClose: "absolute top-4 right-4 text-slate-400 hover:text-ink",
+  card: "guided-card rounded-3xl p-4",
+  heroCard: "journey-hero-card guided-card rounded-[2rem] p-4 guided-enter",
+  softCard: "rounded-3xl bg-white/70 border border-white/75 p-4",
+  softCardSm: "rounded-2xl bg-white/65 border border-white/70 p-2.5",
+  label10: "text-[10px] uppercase tracking-widest font-extrabold text-slate-400",
+  label11: "text-[11px] uppercase tracking-widest font-extrabold text-slate-400",
+  headingLg: "font-display font-extrabold text-2xl",
+  headingMd: "font-display font-extrabold text-xl",
+  primaryAction: "btn-premium text-white font-extrabold rounded-2xl px-5 py-3.5 flex items-center justify-center gap-2",
+  glassAction: "glass rounded-2xl px-4 py-2.5 font-bold text-slate-600",
+  daySnapButton: "day-snap-btn glass rounded-xl px-3 py-2 text-xs font-extrabold text-slate-600 flex items-center justify-center gap-1.5",
+  disabledChip: "inline-flex items-center gap-1.5 rounded-xl bg-slate-100 px-3 py-2 text-xs font-extrabold text-slate-400",
+};
+
 // Confirmação não bloqueante no padrão visual do app (substitui o
 // confirm() nativo, que ignora o tema e trava webviews/embeds).
 function uiConfirm(message, onConfirm){
@@ -57,6 +76,17 @@ function uiConfirm(message, onConfirm){
 }
 
 /* ---------- componentes pequenos ---------- */
+function pill(label, tone = "slate", extra = ""){
+  const tones = {
+    green:"bg-mxgreen/15 text-mxgreen",
+    gold:"bg-gold-500/20 text-gold-600",
+    red:"bg-usared/10 text-usared",
+    blue:"bg-usablue/10 text-usablue",
+    slate:"bg-slate-200 text-slate-500",
+  };
+  return `<span class="${cx("rounded-full px-2 py-0.5 text-[10px] font-bold", tones[tone] || tones.slate, extra)}">${label}</span>`;
+}
+
 function statusBadge(status){
   if(status === "Classificado") return `<span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-mxgreen/15 text-mxgreen">Classificado</span>`;
   if(status === "3º classificado") return `<span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-gold-500/20 text-gold-600">3º · melhores</span>`;
@@ -125,4 +155,4 @@ function getFavoriteTeam(){
   return activeRecord()?.favoriteTeam || appState.draftTeam || null;
 }
 
-export { $, el, flag, getAllTeamsFromSimulation, getFavoriteTeam, ic, matchScheduleLine, paintIcons, renderSimulationTypeBadge, renderSimulationTypeControls, rowDot, scoreLine, statusBadge, uiConfirm, zebraTeam };
+export { $, UI, cx, el, flag, getAllTeamsFromSimulation, getFavoriteTeam, ic, matchScheduleLine, paintIcons, pill, renderSimulationTypeBadge, renderSimulationTypeControls, rowDot, scoreLine, statusBadge, uiConfirm, zebraTeam };
