@@ -1,0 +1,38 @@
+/* =================================================================
+   TOKENS DE DESIGN
+   -----------------------------------------------------------------
+   Variáveis globais do tema. As cores de marca espelham o config do
+   Tailwind no index.html (gold/ink/mxgreen/usared/usablue) — alterar
+   aqui não muda as classes utilitárias, apenas o CSS customizado.
+
+   Escala de z-index usada pelo app (referência):
+     40  rodapé mobile da jornada
+     50  header fixo
+     70  modal de partida (dashboard)
+     75  modal de snapshot da jornada
+     80  loader / simulador de partida / planejador tático
+     95  diálogo de confirmação (uiConfirm)
+   ================================================================= */
+:root{
+  /* superfícies */
+  --bg:#f6f7fb;
+  --ink:#0b1020;
+
+  /* paleta de marca (EUA · México · Canadá) */
+  --brand-blue:#0a3161;
+  --brand-red:#b31942;
+  --brand-green:#1f7a4d;
+  --gold-400:#f5d272;
+  --gold-500:#e9b949;
+  --gold-600:#c8962f;
+
+  /* gradiente oficial do projeto */
+  --grad-2026:linear-gradient(120deg,var(--brand-blue) 0%,var(--brand-green) 45%,var(--brand-red) 100%);
+
+  /* sombras recorrentes */
+  --shadow-glass:0 8px 30px rgba(15,23,42,.08),0 1px 2px rgba(15,23,42,.06);
+  --shadow-lift:0 24px 60px -12px rgba(15,23,42,.22);
+
+  /* transição padrão dos cards/botões */
+  --ease-spring:cubic-bezier(.2,.8,.2,1);
+}

@@ -1,4 +1,3 @@
-"use strict";
 
 // Regra de proteção do ranking FIFA no sorteio de 2026.
 // A FIFA separou os quatro mais bem ranqueados em caminhos protegidos:
@@ -16,7 +15,7 @@ const FIFA_FINAL_ONLY_PAIRS = new Set([
   pairKey("Espanha","Argentina"),
   pairKey("França","Inglaterra"),
 ]);
-function topSeedRuleFor(teamA, teamB, stageIdx, protectedTeams){
+function topSeedRuleFor(teamA, teamB, stageIdx){
   const A = FIFA_TOP4_BY_TEAM[teamA], B = FIFA_TOP4_BY_TEAM[teamB];
   if(!A || !B) return null;
   // Os 4 melhores do ranking são mantidos separados SEMPRE — independe de terem
@@ -59,3 +58,5 @@ function analyzeTopSeedProtection(groups, knockoutMatches){
     finalOnlyPairs:["Espanha x Argentina","França x Inglaterra"],
   };
 }
+
+export { analyzeTopSeedProtection, topSeedRuleFor };

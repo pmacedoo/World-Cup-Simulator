@@ -1,5 +1,8 @@
-﻿"use strict";
 
+
+import { currentSim } from "../state/simulation-store.js";
+import { narrativeFor } from "../app/narrative.js";
+import { $, flag, ic, scoreLine } from "./render-helpers.js";
 function renderNarrative(){
   const s=currentSim();
   const n=narrativeFor(s);
@@ -37,14 +40,14 @@ function renderStats(){
   // seleção ideal pitch
   const posRows = { GK:[], DF:[], MF:[], FW:[] };
   st.bestXI.forEach(p=> posRows[p.pos]?.push(p));
-  const xiChip = p=>`<div class="glass rounded-xl px-2 py-1.5 text-center shadow-glass min-w-[88px]">
+  const xiChip = p=>`<div class="glass rounded-xl px-2 py-1.5 text-center shadow-glass min-w-[76px] sm:min-w-[88px]">
       <div class="flex justify-center mb-1">${flag(p.team,'flag-lg')}</div>
       <div class="text-[12px] font-bold leading-tight text-slate-800">${p.player.split(' ').slice(-1)[0]}</div>
       ${p.goals?`<div class="text-[10px] text-mxgreen font-bold flex items-center justify-center gap-0.5">${ic('circle-dot','w-2.5 h-2.5')} ${p.goals}</div>`:''}
     </div>`;
   const pitch = `
-    <div class="rounded-2xl p-4" style="background:linear-gradient(160deg,#15803d,#166534);">
-      <div class="space-y-3">
+    <div class="rounded-2xl p-4 overflow-x-auto" style="background:linear-gradient(160deg,#15803d,#166534);">
+      <div class="space-y-3 min-w-[330px] sm:min-w-0">
         <div class="flex justify-center gap-2">${posRows.FW.map(xiChip).join("")}</div>
         <div class="flex justify-center gap-2">${posRows.MF.map(xiChip).join("")}</div>
         <div class="flex justify-center gap-2">${posRows.DF.map(xiChip).join("")}</div>
@@ -83,3 +86,5 @@ function renderStats(){
         <div class="text-[13px] text-slate-500">${f[4]}</div></div>`).join("")}
     </div>`;
 }
+
+export { renderNarrative, renderStats };

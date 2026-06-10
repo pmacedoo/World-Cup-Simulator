@@ -2,8 +2,8 @@
 
 ## Estado Atual
 
-- `index.html` contem a estrutura da pagina e carrega scripts globais.
-- `src/styles/styles.css` contem todo o CSS customizado.
+- `index.html` contem a estrutura da pagina e carrega `src/app/app.js` como modulo ESM (entry unico; o resto do grafo vem por `import`).
+- `src/styles/` contem o CSS dividido por responsabilidade: `tokens.css`, `base.css`, `components.css`, `journey.css`, `match.css` e `dark-mode.css` (carregado por ultimo).
 - `src/data/worldcup-data.js` publica `window.WC_DATA`.
 - `src/engine/simulation.js` contem o motor de simulacao.
 - `src/app/narrative.js` contem a narrativa derivada dos resultados.
@@ -24,13 +24,13 @@ Sugestoes:
 - Validar no navegador.
 - So entao remover o trecho duplicado do arquivo antigo.
 
-## Fase 2: ESM
+## Fase 2: ESM (concluida)
 
-Quando a maior parte do codigo estiver separada:
-
-- Trocar scripts globais por `type="module"`.
-- Usar `import` e `export`.
-- Transformar `window.WC_DATA` em exports de `src/data`.
+- Todos os modulos usam `import`/`export`; o `index.html` carrega so o entry `src/app/app.js` com `type="module"`.
+- `window.WC_DATA`, `window.WC_CALENDAR` e `window.WC_LINEUPS` viraram exports (`WC_DATA`, `WC_CALENDAR`, `WC_LINEUPS`), com `TEAMS`/`GROUPS`/`ISO` exportados direto de `src/data/worldcup-data.js`.
+- Estado mutavel compartilhado entre modulos usa setters (`setRandomSource`, `setJourneyLayoutIsMobile`) porque bindings importados sao somente-leitura.
+- Atencao a ciclos de import: constantes de topo nao podem ler bindings de modulos em ciclo (TDZ) — ver `liveSubPosGroups()` em live-substitutions.
+- O app agora exige servidor (`npm run dev`); abrir o `index.html` via file:// nao funciona com modulos.
 
 ## Fase 3: Build e Deploy
 

@@ -1,8 +1,7 @@
-"use strict";
 
 // Calendario base da Copa 2026, separado da engine para facilitar ajustes.
 // Horarios no fuso usado pela tabela colada no projeto.
-(function(){
+export const WC_CALENDAR = (() => {
   const groupRows = [
     ["2026-06-11","11 de junho","16h","México","África do Sul","A"],
     ["2026-06-11","11 de junho","23h","Coreia do Sul","Tchéquia","A"],
@@ -116,7 +115,7 @@
     {matchNo:Number(matchNo), dateISO:row[0], dateLabel:row[1], time:row[2]},
   ]));
 
-  window.WC_CALENDAR = {
+  return {
     groupMatches,
     groupByLetter,
     groupByKey,

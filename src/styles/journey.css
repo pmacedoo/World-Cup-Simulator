@@ -1,0 +1,445 @@
+/* =================================================================
+   JORNADA GUIADA — casca, céu dia/noite, cards, notícias e mobile
+   ================================================================= */
+
+/* ---------- casca com ciclo de céu ---------- */
+.guided-shell{
+  min-height:100vh;
+  position:relative;
+  overflow:hidden;
+  padding:26px clamp(16px,4vw,42px) 42px;
+  --sky-day:1;
+  --sky-night:0;
+  --midnight-opacity:0;
+}
+.guided-shell > :not(.guided-celestial):not(.guided-sky-fade){position:relative;z-index:1;}
+.guided-content{position:relative;z-index:1;}
+/* céu diurno (camada base) */
+.guided-shell::before,
+.guided-day::before,
+.guided-night::before{
+  content:"";position:absolute;inset:0;z-index:-3;background:
+    radial-gradient(760px 430px at 10% 10%,rgba(245,210,114,.16),transparent 62%),
+    radial-gradient(760px 430px at 92% 4%,rgba(10,49,97,.10),transparent 58%),
+    radial-gradient(760px 520px at 54% 100%,rgba(31,122,77,.11),transparent 62%),
+    linear-gradient(180deg,#fbfdff 0%,#eef5fb 100%);
+}
+/* céu noturno (camada sobreposta, controlada por --midnight-opacity) */
+.guided-shell::after{
+  content:"";position:absolute;inset:0;z-index:-1;opacity:var(--midnight-opacity);background:
+    radial-gradient(900px 520px at 12% 5%,rgba(10,49,97,.72),transparent 62%),
+    radial-gradient(820px 520px at 88% 8%,rgba(11,16,32,.82),transparent 58%),
+    linear-gradient(180deg,rgba(4,10,24,.94) 0%,rgba(10,49,97,.82) 52%,rgba(15,23,42,.90) 100%);
+  transition:opacity .18s linear;
+}
+.guided-night::after{opacity:var(--midnight-opacity);}
+
+/* transição suave entre dia e noite ao re-renderizar */
+.guided-sky-fade{
+  position:absolute;
+  inset:0;
+  z-index:-2;
+  pointer-events:none;
+  opacity:0;
+  display:none;
+}
+.sky-from-day .guided-sky-fade{
+  background:
+    radial-gradient(760px 430px at 10% 10%,rgba(245,210,114,.18),transparent 62%),
+    radial-gradient(760px 430px at 92% 4%,rgba(10,49,97,.13),transparent 58%),
+    radial-gradient(760px 520px at 54% 100%,rgba(31,122,77,.13),transparent 62%),
+    linear-gradient(180deg,#fbfdff 0%,#eef5fb 100%);
+  animation:guidedSkyFadeOut 3.05s cubic-bezier(.22,.75,.18,1) both;
+}
+.sky-from-night .guided-sky-fade{
+  background:
+    radial-gradient(780px 430px at 12% 5%,rgba(10,49,97,.42),transparent 62%),
+    radial-gradient(760px 430px at 88% 8%,rgba(179,25,66,.26),transparent 58%),
+    radial-gradient(820px 560px at 50% 100%,rgba(31,122,77,.20),transparent 62%),
+    linear-gradient(180deg,#07111f 0%,#0b1424 48%,#111827 100%);
+  animation:guidedSkyFadeOut 3.05s cubic-bezier(.22,.75,.18,1) both;
+}
+.sky-from-day::before,
+.sky-from-night::before{
+  animation:guidedNewSkyFadeIn 3.05s cubic-bezier(.22,.75,.18,1) both;
+}
+@keyframes guidedSkyFadeOut{
+  from{opacity:1;transform:translateY(0);}
+  48%{opacity:.82;transform:translateY(-1.5vh);}
+  78%{opacity:.32;transform:translateY(-5vh);}
+  to{opacity:0;transform:translateY(-9vh);}
+}
+@keyframes guidedNewSkyFadeIn{
+  from{opacity:0;}
+  34%{opacity:.18;}
+  72%{opacity:.82;}
+  to{opacity:1;}
+}
+
+/* sol/lua no horizonte */
+.guided-celestial{
+  position:absolute;
+  left:50%;
+  bottom:-34vh;
+  width:145vmax;
+  height:72vmax;
+  transform:translateX(-50%);
+  z-index:-1;
+  pointer-events:none;
+  border-radius:50% 50% 0 0;
+  opacity:.78;
+  filter:blur(18px);
+  mix-blend-mode:multiply;
+  display:none;
+}
+.guided-day .guided-celestial{
+  background:
+    radial-gradient(closest-side at 50% 30%,rgba(255,244,190,.92),rgba(245,210,114,.42) 44%,rgba(255,255,255,0) 70%),
+    linear-gradient(180deg,rgba(245,210,114,.32),rgba(255,255,255,0));
+  animation:guidedSunrise 3.15s cubic-bezier(.22,.75,.18,1) both;
+}
+.guided-night .guided-celestial{
+  background:
+    radial-gradient(closest-side at 50% 32%,rgba(10,49,97,.72),rgba(11,16,32,.76) 46%,rgba(11,16,32,0) 72%),
+    linear-gradient(180deg,rgba(10,49,97,.34),rgba(11,16,32,0));
+  mix-blend-mode:screen;
+  animation:guidedNightfall 3.15s cubic-bezier(.22,.75,.18,1) both;
+}
+@keyframes guidedSunrise{
+  from{transform:translateX(-50%) translateY(38vh) scale(.9);opacity:0;}
+  36%{opacity:.18;}
+  72%{opacity:.74;}
+  to{transform:translateX(-50%) translateY(-8vh) scale(1);opacity:.78;}
+}
+@keyframes guidedNightfall{
+  from{transform:translateX(-50%) translateY(40vh) scale(.9);opacity:0;}
+  36%{opacity:.16;}
+  72%{opacity:.68;}
+  to{transform:translateX(-50%) translateY(-7vh) scale(1);opacity:.72;}
+}
+
+/* navegação superior em noite */
+.guided-night .guided-top-nav{color:#f8fafc;}
+.guided-night .guided-top-nav .text-slate-500{color:#cbd5e1;}
+.guided-night .guided-top-nav .glass{
+  background:rgba(15,23,42,.56);
+  border-color:rgba(255,255,255,.16);
+  color:#dbe4ef;
+}
+.guided-night .guided-top-nav .bg-ink{
+  background:#f8fafc;
+  color:#0f172a;
+}
+
+/* ---------- cards da experiência guiada ---------- */
+.guided-card{background:rgba(255,255,255,.7);border:1px solid rgba(255,255,255,.72);backdrop-filter:saturate(180%) blur(22px);box-shadow:0 26px 90px -36px rgba(15,23,42,.35);}
+.guided-enter{animation:guidedEnter .7s var(--ease-spring) both;}
+.guided-stagger{animation:guidedEnter .55s var(--ease-spring) both;animation-delay:calc(var(--i,0)*55ms);}
+@keyframes guidedEnter{from{opacity:0;transform:translateY(18px) scale(.985)}to{opacity:1;transform:none}}
+
+.team-pick-card,.type-pick-card{transition:transform .25s var(--ease-spring),box-shadow .25s,border-color .25s,background .25s;}
+.team-pick-card:hover,.type-pick-card:hover{transform:translateY(-4px);box-shadow:0 22px 60px -24px rgba(15,23,42,.38);}
+.team-pick-card.active,.type-pick-card.active{border-color:rgba(200,150,47,.78);background:linear-gradient(150deg,rgba(255,255,255,.92),rgba(255,248,225,.7));box-shadow:0 18px 60px -24px rgba(200,150,47,.75);}
+
+/* trilho da campanha jogo a jogo */
+.journey-rail{position:relative;}
+.journey-rail::before{content:"";position:absolute;left:22px;top:36px;bottom:36px;width:2px;background:linear-gradient(var(--brand-blue),var(--brand-green),var(--brand-red));opacity:.28;border-radius:99px;}
+.journey-match-card{position:relative;transition:transform .22s ease,box-shadow .22s ease;}
+.journey-match-card:hover{transform:translateX(4px);box-shadow:0 18px 52px -28px rgba(15,23,42,.44);}
+.journey-hero-card{min-height:0;display:flex;flex-direction:column;}
+
+.jump-to-match-btn{
+  min-height:52px;
+  color:#12324f;
+  background:
+    linear-gradient(135deg,rgba(255,255,255,.86),rgba(245,210,114,.26) 46%,rgba(31,122,77,.16));
+  border:1px solid rgba(10,49,97,.18);
+  box-shadow:0 12px 32px -18px rgba(10,49,97,.55),inset 0 1px 0 rgba(255,255,255,.74);
+  backdrop-filter:saturate(180%) blur(18px);
+  -webkit-backdrop-filter:saturate(180%) blur(18px);
+  transition:transform .22s var(--ease-spring),box-shadow .22s,border-color .22s,background-position .45s;
+  background-size:150% 150%;
+}
+.jump-to-match-btn:hover{
+  transform:translateY(-2px);
+  border-color:rgba(31,122,77,.28);
+  background-position:100% 50%;
+  box-shadow:0 18px 42px -18px rgba(10,49,97,.62),inset 0 1px 0 rgba(255,255,255,.80);
+}
+.jump-to-match-btn:active{transform:translateY(0) scale(.99);}
+
+/* status da campanha (pronta/viva/em risco/eliminada/campeã) */
+.journey-status{border-radius:20px;padding:13px;border:1px solid rgba(255,255,255,.72);background:rgba(255,255,255,.62);color:#475569;}
+.journey-status.ready{background:rgba(10,49,97,.08);border-color:rgba(10,49,97,.18);color:#334155;}
+.journey-status.alive{background:rgba(31,122,77,.10);border-color:rgba(31,122,77,.20);color:#285342;}
+.journey-status.danger,.journey-status.eliminated{background:rgba(179,25,66,.10);border-color:rgba(179,25,66,.20);color:#7f1d1d;}
+.journey-status.champion{background:rgba(233,185,73,.18);border-color:rgba(200,150,47,.34);color:#713f12;}
+
+/* listas roláveis internas */
+.journey-scroll-list{
+  overflow-y:auto;
+  overscroll-behavior:contain;
+  padding-right:5px;
+  padding-bottom:6px;
+}
+.saved-sims-scroll{max-height:218px;}
+.calendar-day-list{max-height:310px;}
+.calendar-day-match{transition:transform .18s ease,box-shadow .18s ease;}
+.calendar-day-match:hover{transform:translateY(-1px);box-shadow:0 14px 34px -26px rgba(15,23,42,.38);}
+
+.journey-period-pill{
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  min-width:118px;
+  border-radius:999px;
+  padding:6px 9px;
+  color:#334155;
+  background:linear-gradient(90deg,rgba(245,210,114,.20),rgba(10,49,97,calc(.06 + var(--night-level,0) * .18)));
+  border:1px solid rgba(148,163,184,.22);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.55);
+}
+.journey-period-dot{
+  width:24px;
+  height:24px;
+  border-radius:999px;
+  flex:none;
+  background:
+    radial-gradient(circle at 36% 35%,rgba(255,255,255,.96) 0 20%,rgba(255,255,255,0) 21%),
+    linear-gradient(135deg,#f5d272,#f59e0b);
+  box-shadow:0 0 0 calc(2px + var(--night-level,0) * 2px) rgba(10,49,97,calc(.10 + var(--night-level,0) * .16));
+  filter:saturate(calc(1.15 - var(--night-level,0) * .35));
+}
+.journey-period-pill.is-night .journey-period-dot{
+  background:
+    radial-gradient(circle at 34% 30%,rgba(255,255,255,.92) 0 16%,rgba(255,255,255,0) 17%),
+    linear-gradient(135deg,#334155,#0a3161);
+}
+.journey-period-level{
+  width:46px;
+  height:4px;
+  overflow:hidden;
+  border-radius:999px;
+  background:rgba(148,163,184,.24);
+}
+.journey-period-level span{
+  display:block;
+  width:calc(var(--night-level,0) * 100%);
+  height:100%;
+  border-radius:inherit;
+  background:linear-gradient(90deg,#f5d272,#0a3161);
+  transition:width .18s linear;
+}
+
+/* relógio da jornada */
+.journey-clock-panel{background:rgba(255,255,255,.66);border:1px solid rgba(255,255,255,.76);box-shadow:inset 0 1px 0 rgba(255,255,255,.7);}
+.journey-clock-track{height:6px;border-radius:999px;background:rgba(148,163,184,.2);overflow:hidden;}
+.journey-clock-track span{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,#f2c14e,var(--brand-green),var(--brand-blue));transition:width .7s var(--ease-spring);}
+.journey-clock-panel.is-ticking{animation:clockPulse .9s ease both;}
+@keyframes clockPulse{from{box-shadow:0 0 0 0 rgba(31,122,77,.24)}50%{box-shadow:0 0 0 8px rgba(31,122,77,.08)}to{box-shadow:inset 0 1px 0 rgba(255,255,255,.7)}}
+
+/* ---------- Central da Copa (notícias) ---------- */
+.journey-news-card{background:linear-gradient(180deg,rgba(255,255,255,.82),rgba(255,255,255,.68));}
+.journey-news-window{position:relative;overflow:hidden;flex:1;min-height:255px;border-radius:22px;background:#fff;}
+.journey-news-stage{position:absolute;inset:0;}
+.journey-news-item{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;border-radius:20px;padding:24px;background:linear-gradient(180deg,#ffffff 0%,#f8fafc 100%);border:1px solid rgba(226,232,240,.95);box-shadow:0 14px 34px -28px rgba(15,23,42,.45);opacity:0;transform:translateX(34px);transition:opacity .45s ease,transform .45s var(--ease-spring);pointer-events:none;}
+.journey-news-item.is-active{opacity:1;transform:translateX(0);pointer-events:auto;}
+.journey-news-item.good{border-top:4px solid #16a34a;}
+.journey-news-item.bad{border-top:4px solid var(--brand-red);}
+.journey-news-paperhead{position:absolute;left:0;right:0;top:0;height:42px;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:0 18px;background:#0f172a;color:#fff;font-size:10px;font-weight:900;letter-spacing:.12em;text-transform:uppercase;}
+.journey-news-tag{width:max-content;margin-top:30px;padding:5px 8px;border-radius:999px;font-size:10px;font-weight:900;letter-spacing:.12em;text-transform:uppercase;color:#94a3b8;background:#f1f5f9;}
+.journey-news-item.good .journey-news-tag{color:#15803d;background:rgba(22,163,74,.10);}
+.journey-news-item.bad .journey-news-tag{color:#b91c1c;background:rgba(179,25,66,.10);}
+.journey-news-item h3{margin-top:10px;font-family:"Plus Jakarta Sans",Inter,sans-serif;font-weight:900;font-size:25px;line-height:1.05;color:#0f172a;}
+.journey-news-item p{margin-top:10px;font-size:14px;line-height:1.45;color:#475569;font-weight:650;}
+.journey-news-meta{margin-top:auto;padding-top:14px;border-top:1px solid #e2e8f0;font-size:12px;font-weight:900;color:#64748b;}
+.journey-news-progress{height:4px;border-radius:999px;background:rgba(148,163,184,.18);overflow:hidden;}
+.journey-news-progress-fill{height:100%;width:0%;border-radius:inherit;background:linear-gradient(90deg,var(--brand-blue),var(--brand-green),var(--gold-600));transition:width .08s linear;}
+.journey-news-window.is-paused + .journey-news-progress .journey-news-progress-fill{background:linear-gradient(90deg,#64748b,#94a3b8);}
+.journey-news-dot{width:7px;height:7px;border-radius:999px;border:none;padding:0;background:rgba(148,163,184,.45);transition:width .25s,background .25s;cursor:pointer;}
+.journey-news-dot.is-active{width:22px;background:var(--brand-blue);}
+@media (max-width:1280px){.journey-news-window{min-height:230px}.journey-news-item h3{font-size:21px}}
+
+/* ---------- banner do avanço automático ---------- */
+.auto-advance-banner{
+  position:absolute;inset:0;z-index:30;border-radius:inherit;
+  display:flex;align-items:center;justify-content:center;
+  overflow:hidden;background:rgba(7,17,31,.58);
+  backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
+  animation:aaBannerIn .32s var(--ease-spring) both;
+}
+.auto-advance-banner.is-out{animation:aaBannerOut .4s ease both;}
+@keyframes aaBannerIn{from{opacity:0}to{opacity:1}}
+@keyframes aaBannerOut{to{opacity:0}}
+.auto-advance-bar{position:absolute;inset:0;background:linear-gradient(90deg,rgba(31,122,77,.48) 0%,rgba(31,122,77,.06) 100%);animation:aaBarL .95s var(--ease-spring) both;}
+.auto-advance-bar.from-right{background:linear-gradient(270deg,rgba(31,122,77,.48) 0%,rgba(31,122,77,.06) 100%);animation:aaBarR .95s var(--ease-spring) both;}
+.auto-advance-bar.draw{background:rgba(31,122,77,.2);animation:aaBarL .95s var(--ease-spring) both;}
+@keyframes aaBarL{from{clip-path:inset(0 100% 0 0 round inherit)}to{clip-path:inset(0 0% 0 0 round inherit)}}
+@keyframes aaBarR{from{clip-path:inset(0 0 0 100% round inherit)}to{clip-path:inset(0 0 0 0% round inherit)}}
+.auto-advance-result{
+  position:relative;z-index:1;display:flex;align-items:center;gap:14px;
+  background:rgba(11,16,32,.82);border:1px solid rgba(255,255,255,.18);
+  border-radius:20px;padding:14px 22px;
+}
+.auto-advance-team{font-size:13px;font-weight:800;color:rgba(255,255,255,.88);}
+.auto-advance-score{
+  font-family:"Plus Jakarta Sans",Inter,sans-serif;font-weight:900;
+  font-size:28px;color:#fff;padding:0 10px;
+  min-width:96px;text-align:center;
+}
+.auto-advance-score.is-final{animation:aaScoreFlash .32s ease 3 alternate;}
+@keyframes aaScoreFlash{from{color:#fff}to{color:var(--gold-400)}}
+
+/* ---------- layout mobile da jornada (app de abas) ---------- */
+.mobile-journey-app{display:none;}
+.mobile-journey-topbar{
+  height:48px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:10px 14px;
+  color:#0f172a;
+}
+.mobile-journey-viewport{
+  height:calc(100dvh - 48px - 66px);
+  overflow:hidden;
+  touch-action:pan-y;
+}
+.mobile-journey-panel-inner{
+  height:100%;
+  overflow-y:auto;
+  overscroll-behavior:contain;
+  padding:8px 12px calc(34px + env(safe-area-inset-bottom));
+  scrollbar-width:thin;
+  scrollbar-color:rgba(100,116,139,.44) rgba(226,232,240,.24);
+}
+.mobile-journey-panel-inner::-webkit-scrollbar{width:7px;}
+.mobile-journey-panel-inner::-webkit-scrollbar-thumb{background:rgba(100,116,139,.42);border-radius:999px;}
+.mobile-journey-panel-inner::-webkit-scrollbar-track{background:rgba(226,232,240,.24);}
+.mobile-journey-panel-inner.no-scroll{overflow-y:auto;}
+.mobile-journey-footer{
+  position:fixed;
+  left:0;
+  right:0;
+  bottom:0;
+  z-index:40;
+  height:66px;
+  padding:5px 8px calc(5px + env(safe-area-inset-bottom));
+  display:grid;
+  grid-template-columns:repeat(5,1fr);
+  gap:4px;
+  background:rgba(255,255,255,.82);
+  border-top:1px solid rgba(226,232,240,.86);
+  backdrop-filter:saturate(180%) blur(22px);
+  -webkit-backdrop-filter:saturate(180%) blur(22px);
+  box-shadow:0 -18px 44px -32px rgba(15,23,42,.55);
+}
+.mobile-journey-tab{
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  gap:3px;
+  border-radius:16px;
+  color:#64748b;
+  font-size:10px;
+  line-height:1;
+  font-weight:900;
+  transition:background .18s ease,color .18s ease,transform .18s ease;
+}
+.mobile-journey-tab.active{
+  color:var(--brand-blue);
+  background:rgba(10,49,97,.09);
+}
+.mobile-journey-tab:active{transform:scale(.96);}
+.mobile-day-match-list{max-height:calc(100dvh - 260px);}
+.mobile-campaign-list{max-height:calc(100dvh - 228px);}
+.mobile-scroll-hint{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:6px;
+  margin:8px auto 0;
+  color:#64748b;
+  font-size:10px;
+  line-height:1;
+  font-weight:900;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+}
+.mobile-scroll-hint::after{
+  content:"";
+  width:6px;
+  height:6px;
+  border-right:2px solid currentColor;
+  border-bottom:2px solid currentColor;
+  transform:rotate(45deg) translateY(-1px);
+}
+.guided-night .mobile-journey-topbar{color:#f8fafc;}
+.guided-night .mobile-journey-footer{
+  background:rgba(15,23,42,.86);
+  border-top-color:rgba(148,163,184,.16);
+}
+.guided-night .mobile-journey-tab{color:#94a3b8;}
+.guided-night .mobile-journey-tab.active{
+  color:#f8fafc;
+  background:rgba(59,130,246,.18);
+}
+
+@media(max-width:767px), (pointer:coarse) and (max-width:1024px){
+  .guided-mobile-shell{
+    min-height:100dvh;
+    height:100dvh;
+    padding:0;
+    overflow:hidden;
+  }
+  .guided-mobile-shell .guided-content{height:100dvh;}
+  .mobile-journey-app{
+    display:block;
+    height:100dvh;
+    padding-bottom:calc(66px + env(safe-area-inset-bottom));
+  }
+  .mobile-journey-app .journey-hero-card,
+  .mobile-journey-app .guided-card{
+    border-radius:22px;
+    max-height:100%;
+    overflow:hidden;
+  }
+  .mobile-journey-app .journey-news-card{height:100%;}
+  .mobile-journey-app .journey-news-window{
+    min-height:0;
+    height:clamp(260px, calc(100dvh - 250px), 360px);
+    flex:none;
+  }
+  .mobile-journey-app .journey-news-item{padding:16px;}
+  .mobile-journey-app .journey-news-item h3{
+    font-size:20px;
+    line-height:1.08;
+  }
+  .mobile-journey-app .journey-news-item p{
+    font-size:12px;
+    line-height:1.35;
+  }
+  .mobile-journey-app .calendar-day-list{max-height:calc(100dvh - 292px);}
+  .mobile-journey-app .mobile-day-match-list{max-height:calc(100dvh - 286px);}
+  .mobile-journey-app .mobile-campaign-list{max-height:calc(100dvh - 254px);}
+  .mobile-journey-app .saved-sims-scroll{max-height:160px;}
+  .mobile-journey-app #resetGuidedSmall{
+    display:block;
+    width:max-content;
+    margin-left:auto;
+    margin-right:auto;
+  }
+  .mobile-today-strip{display:block;}
+}
+
+/* ajustes gerais da jornada em telas pequenas */
+@media(max-width:639px){
+  .journey-hero-card{border-radius:16px;}
+  .journey-clock-panel{padding:8px 14px;}
+  .guided-card{border-radius:16px;padding:12px !important;}
+  .journey-news-item{padding:10px 12px;}
+  .btn-premium{padding:10px 16px;font-size:14px;}
+  /* cards de jogos do calendário */
+  .match-card{padding:8px 10px;}
+}

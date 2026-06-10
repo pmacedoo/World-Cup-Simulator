@@ -59,7 +59,13 @@
 <script src="https://unpkg.com/lucide@0.460.0/dist/umd/lucide.min.js"></script>
 
 <!-- ===================== CUSTOM CSS ===================== -->
-<link rel="stylesheet" href="./src/styles/styles.css" />
+<!-- ordem importa: tokens primeiro, dark-mode por último -->
+<link rel="stylesheet" href="./src/styles/tokens.css" />
+<link rel="stylesheet" href="./src/styles/base.css" />
+<link rel="stylesheet" href="./src/styles/components.css" />
+<link rel="stylesheet" href="./src/styles/journey.css" />
+<link rel="stylesheet" href="./src/styles/match.css" />
+<link rel="stylesheet" href="./src/styles/dark-mode.css" />
 </head>
 
 <body class="font-sans text-ink antialiased selection:bg-usablue/20">
@@ -319,31 +325,12 @@
       <p>Este é um produto <b>não-oficial</b> e <b>fictício</b>. Resultados, escalações e gols são <b>projeções geradas por software</b>. Os grupos, a lista de 48 seleções e os 26 convocados por seleção seguem a base anexada/agenda oficial; placares e escalações-base continuam sendo simulações.</p>
     </div>
   </div>
-  <div class="text-center text-xs text-slate-400 pb-8">Feito com Tailwind CSS + JavaScript puro · sem backend · sem build step.</div>
+  <div class="text-center text-xs text-slate-400 pb-8">Feito com Tailwind CSS + JavaScript (ES Modules) · sem backend · build com Vite.</div>
 </footer>
 
 <!-- ============================================================= -->
-<!-- DATA + ENGINE + RENDER                                         -->
+<!-- APP (ES Modules: app.js importa todo o grafo de módulos)       -->
 <!-- ============================================================= -->
-<script src="./src/data/worldcup-data.js"></script>
-<script src="./src/data/venues.js"></script>
-<script src="./src/data/worldcup-calendar.js"></script>
-<script src="./src/engine/random.js"></script>
-<script src="./src/engine/scoring.js"></script>
-<script src="./src/engine/lineups.js"></script>
-<script src="./src/domain/bracket/top-seed-protection.js"></script>
-<script src="./src/engine/simulation.js"></script>
-<script src="./src/app/narrative.js"></script>
-<script src="./src/state/simulation-profiles.js"></script>
-<script src="./src/state/simulation-store.js"></script>
-<script src="./src/ui/render-helpers.js"></script>
-<script src="./src/ui/guided-experience.js"></script>
-<script src="./src/ui/dashboard.js"></script>
-<script src="./src/ui/tournament-sections.js"></script>
-<script src="./src/ui/bracket.js"></script>
-<script src="./src/ui/lineup-editor.js"></script>
-<script src="./src/ui/match-simulator.js"></script>
-<script src="./src/ui/stats.js"></script>
-<script src="./src/app/app.js"></script>
+<script type="module" src="./src/app/app.js"></script>
 </body>
 </html>

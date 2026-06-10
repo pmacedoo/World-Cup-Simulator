@@ -1,9 +1,10 @@
-"use strict";
 
 // Escalacoes e substituicoes ficam isoladas para evoluir depois
 // sem misturar regra de elenco com placar/chaveamento.
-(function(){
-  const { TEAMS } = window.WC_DATA;
+
+import { TEAMS } from "../data/worldcup-data.js";
+import { clamp, mulberry32 } from "./random.js";
+export const WC_LINEUPS = (() => {
 
   function playerObj(teamName, raw){
     return {
@@ -451,7 +452,7 @@
     return {valid, starters, slots};
   }
 
-  window.WC_LINEUPS = {
+  return {
     buildLineup,
     attachMatchPersonnel,
     // modo técnico

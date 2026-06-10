@@ -1,4 +1,3 @@
-"use strict";
 
 /* ----- Sedes (16 cidades-sede oficiais) ----- */
 const VENUES = [
@@ -11,3 +10,5 @@ const VENUES = [
  ["Estádio Akron","Guadalajara"],["Estádio BBVA","Monterrey"],
  ["BMO Field","Toronto"],["BC Place","Vancouver"],
 ];
+
+export { VENUES };

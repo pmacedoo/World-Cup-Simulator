@@ -1,0 +1,155 @@
+/* =================================================================
+   DARK MODE GLOBAL (html.dark-mode)
+   -----------------------------------------------------------------
+   Overrides de tema escuro sobre os componentes claros. Precisa ser
+   o ÚLTIMO stylesheet carregado: várias regras disputam com
+   !important contra utilitárias do tema claro e dependem da ordem
+   do cascade para vencer.
+   ================================================================= */
+html.dark-mode{color-scheme:dark;}
+html.dark-mode body{
+  background:
+    radial-gradient(1200px 600px at 12% -8%,rgba(10,49,97,.22),transparent 60%),
+    radial-gradient(1000px 500px at 100% 0%,rgba(179,25,66,.14),transparent 55%),
+    radial-gradient(900px 600px at 50% 120%,rgba(31,122,77,.12),transparent 60%),
+    #07111f;
+  color:#e5edf8;
+}
+
+/* ---------- superfícies de vidro ---------- */
+html.dark-mode #siteHeader .glass{background:rgba(7,17,31,.88);border-color:rgba(255,255,255,.07);}
+html.dark-mode .glass{background:rgba(15,23,42,.76);border-color:rgba(255,255,255,.07);}
+html.dark-mode .glass-dark{background:rgba(2,6,18,.88);}
+html.dark-mode .guided-card{background:rgba(15,23,42,.84);border-color:rgba(148,163,184,.16);}
+
+/* ---------- overrides de utilitárias (Tailwind) ---------- */
+html.dark-mode .bg-white\/55{background-color:rgba(15,23,42,.72) !important;}
+html.dark-mode [class*="bg-white\/"]{background-color:rgba(15,23,42,.72) !important;}
+html.dark-mode [class*="bg-slate-100"]{background-color:rgba(30,41,59,.72) !important;}
+html.dark-mode [class*="bg-slate-200"]{background-color:rgba(30,41,59,.60) !important;}
+html.dark-mode [class*="border-white\/"]{border-color:rgba(148,163,184,.16) !important;}
+html.dark-mode [class*="border-slate-100"]{border-color:rgba(71,85,105,.4) !important;}
+
+/* ---------- textos ---------- */
+html.dark-mode .text-slate-800{color:#f8fafc;}
+html.dark-mode .text-slate-700{color:#e5edf8;}
+html.dark-mode .text-slate-600{color:#cbd5e1;}
+html.dark-mode .text-slate-500{color:#94a3b8;}
+html.dark-mode .text-slate-400{color:#64748b;}
+html.dark-mode .text-slate-300{color:#475569;}
+
+/* ---------- navegação e controles ---------- */
+html.dark-mode .sim-tab.active{color:#fff;}
+html.dark-mode .nav-link{color:#94a3b8;}
+html.dark-mode .nav-link:hover{color:#f8fafc;}
+html.dark-mode input,html.dark-mode select{background:rgba(15,23,42,.72);color:#e5edf8;border-color:rgba(148,163,184,.2);}
+html.dark-mode .dark-mode-toggle{color:#e5edf8;}
+/* botão confirmar desabilitado continua visível */
+html.dark-mode .btn-premium.opacity-40{background:rgba(51,65,85,.75) !important;opacity:1 !important;color:rgba(148,163,184,.55) !important;box-shadow:none !important;}
+html.dark-mode .scroll-affordance{
+  color:#94a3b8;
+  background:linear-gradient(180deg,rgba(15,23,42,0),rgba(15,23,42,.92) 42%,rgba(15,23,42,.96));
+}
+html.dark-mode .scroll-x-affordance,
+html.dark-mode .mobile-scroll-hint{color:#94a3b8;}
+html.dark-mode .overflow-x-auto,
+html.dark-mode .scroll-x,
+html.dark-mode .journey-scroll-list,
+html.dark-mode .overflow-y-auto{
+  scrollbar-color:rgba(148,163,184,.48) rgba(30,41,59,.50);
+}
+
+/* ---------- jornada: escolha de seleção e relógio ---------- */
+html.dark-mode .team-pick-card.active,
+html.dark-mode .type-pick-card.active{
+  background:linear-gradient(150deg,rgba(30,41,59,.96),rgba(72,54,18,.72)) !important;
+  border-color:rgba(245,210,114,.76) !important;
+  box-shadow:0 18px 60px -24px rgba(245,210,114,.55),0 0 0 1px rgba(245,210,114,.20);
+}
+html.dark-mode .team-pick-card.active .font-display,
+html.dark-mode .type-pick-card.active .font-display{color:#f8fafc;}
+html.dark-mode .team-pick-card.active .text-slate-500,
+html.dark-mode .type-pick-card.active .text-slate-500{color:#cbd5e1;}
+html.dark-mode .journey-clock-panel{background:rgba(15,23,42,.58);border-color:rgba(255,255,255,.08);box-shadow:inset 0 1px 0 rgba(255,255,255,.05);}
+html.dark-mode .jump-to-match-btn{
+  color:#f8fafc;
+  background:linear-gradient(135deg,rgba(15,23,42,.92),rgba(10,49,97,.62) 48%,rgba(31,122,77,.34));
+  border-color:rgba(148,163,184,.20);
+  box-shadow:0 14px 36px -20px rgba(0,0,0,.72),inset 0 1px 0 rgba(255,255,255,.08);
+}
+html.dark-mode .journey-period-pill{
+  color:#dbe4ef;
+  background:linear-gradient(90deg,rgba(245,210,114,.10),rgba(59,130,246,calc(.10 + var(--night-level,0) * .20)));
+  border-color:rgba(148,163,184,.20);
+}
+html.dark-mode .journey-period-level{background:rgba(148,163,184,.18);}
+
+/* ---------- jornada: central de notícias ---------- */
+html.dark-mode .journey-news-card{background:linear-gradient(180deg,rgba(15,23,42,.84),rgba(11,16,32,.78));}
+html.dark-mode .journey-news-window{background:rgba(11,16,32,.9);}
+html.dark-mode .journey-news-item{background:linear-gradient(180deg,rgba(15,23,42,.97) 0%,rgba(11,16,32,.93) 100%);border-color:rgba(148,163,184,.10);}
+html.dark-mode .journey-news-item.good{border-top-color:#16a34a;}
+html.dark-mode .journey-news-item.bad{border-top-color:var(--brand-red);}
+html.dark-mode .journey-news-item h3{color:#f8fafc;}
+html.dark-mode .journey-news-item p{color:#94a3b8;}
+html.dark-mode .journey-news-meta{border-top-color:rgba(148,163,184,.12);color:#64748b;}
+html.dark-mode .journey-news-tag{background:rgba(30,41,59,.85);color:#94a3b8;}
+html.dark-mode .journey-news-item.good .journey-news-tag{color:#4ade80;background:rgba(22,163,74,.14);}
+html.dark-mode .journey-news-item.bad .journey-news-tag{color:#f87171;background:rgba(179,25,66,.14);}
+html.dark-mode .journey-news-dot{background:rgba(100,116,139,.35);}
+html.dark-mode .journey-news-dot.is-active{background:#3b82f6;}
+
+/* ---------- chaveamento ---------- */
+html.dark-mode .bracket-match{background:rgba(15,23,42,.82);box-shadow:0 10px 30px -20px rgba(0,0,0,.7),0 0 0 1px rgba(255,255,255,.06);}
+html.dark-mode .bracket-winner{background:rgba(255,255,255,.06);color:#f8fafc;}
+html.dark-mode .bracket-champion{background:linear-gradient(160deg,rgba(15,23,42,.9),rgba(30,20,5,.85));border-color:rgba(200,150,47,.4);}
+html.dark-mode .bracket-champ-banner{background:linear-gradient(160deg,rgba(233,185,73,.14),rgba(15,23,42,.6));border-color:rgba(200,150,47,.32);}
+html.dark-mode .bracket-scroll{scrollbar-color:rgba(148,163,184,.48) rgba(30,41,59,.50);}
+
+/* ---------- simulador de partida ---------- */
+html.dark-mode .match-stage-badge{background:linear-gradient(180deg,var(--stage-bg),rgba(30,41,59,.55)) !important;border-color:rgba(255,255,255,.12) !important;}
+html.dark-mode .match-stage-badge.stage-group-1{--stage-fg:#94a3b8;}
+html.dark-mode .match-stage-badge.stage-group-2{--stage-fg:#6ee7b7;}
+html.dark-mode .match-stage-badge.stage-group-3{--stage-fg:#6ee7b7;}
+html.dark-mode .match-stage-badge.stage-r32{--stage-fg:#6ee7b7;}
+html.dark-mode .match-stage-badge.stage-r16{--stage-fg:#4ade80;}
+html.dark-mode .match-stage-badge.stage-qf{--stage-fg:#34d399;}
+html.dark-mode .match-stage-badge.stage-semi{--stage-fg:#34d399;}
+html.dark-mode .match-stage-badge.stage-final{--stage-fg:#a7f3d0;}
+html.dark-mode #simClock{color:#94a3b8;}
+html.dark-mode #simPhase{color:#94a3b8;}
+html.dark-mode .match-side{background:rgba(15,23,42,.45) !important;}
+html.dark-mode #simTimeline::after{
+  color:#94a3b8;
+  background:linear-gradient(180deg,rgba(15,23,42,0),rgba(15,23,42,.92) 42%,rgba(15,23,42,.96));
+}
+
+/* ---------- planejador tático e carrossel ---------- */
+html.dark-mode .lineup-player-carousel{background:rgba(15,23,42,.62);border-color:rgba(255,255,255,.08);}
+html.dark-mode .lineup-player-carousel .grid::after,
+html.dark-mode #liveSubMount .lineup-player-carousel .space-y-2::after{
+  color:#94a3b8;
+  background:linear-gradient(180deg,rgba(15,23,42,0),rgba(15,23,42,.92) 42%,rgba(15,23,42,.96));
+}
+html.dark-mode .pos-carousel-btn{color:#94a3b8;background:rgba(15,23,42,.72);border-color:rgba(255,255,255,.09);}
+html.dark-mode .pos-carousel-btn:hover{color:#f8fafc;background:rgba(30,41,59,.88);}
+html.dark-mode .player-scroll-btn{color:#94a3b8;background:rgba(15,23,42,.72);border-color:rgba(255,255,255,.09);}
+html.dark-mode .player-scroll-btn:hover{color:#f8fafc;background:rgba(30,41,59,.88);}
+
+/* ---------- substituições em jogo ---------- */
+html.dark-mode .ls-formation-badge{background:rgba(0,0,0,.78);}
+html.dark-mode .ls-player-card{background:rgba(30,41,59,.55);border-color:rgba(255,255,255,.1);}
+html.dark-mode .ls-player-card:hover:not(.pointer-events-none){background:rgba(51,65,85,.8);}
+html.dark-mode .ls-player-sel{background:rgba(59,45,5,.6) !important;border-color:var(--gold-600) !important;}
+html.dark-mode .ls-carousel-col{border-left-color:rgba(255,255,255,.06);}
+
+/* ---------- disputa de pênaltis ---------- */
+html.dark-mode .pk-wrap{background:linear-gradient(170deg,rgba(10,49,97,.14),rgba(15,23,42,.7));border-color:rgba(255,255,255,.07);}
+html.dark-mode .pk-featured-event{background:rgba(15,23,42,.8);border-color:rgba(255,255,255,.08);color:#dbe4ef;}
+html.dark-mode .pk-side.active{background:rgba(10,49,97,.18);}
+
+/* ---------- mobile ---------- */
+@media(max-width:639px){
+  /* picker empilhado troca a divisória de coluna por linha */
+  html.dark-mode .ls-carousel-col{border-top-color:rgba(255,255,255,.06);}
+}
