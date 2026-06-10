@@ -15,10 +15,10 @@ import { PROFILE_ORDER, profileFor } from "../../state/simulation-profiles.js";
 import { activeRecord, appState, createSimulation, deleteSimulation, persistSims, setActiveSimulation } from "../../state/simulation-store.js";
 import { $, flag, getAllTeamsFromSimulation, getFavoriteTeam, ic, paintIcons, renderSimulationTypeBadge, uiConfirm } from "../render-helpers.js";
 import { journeyVisibleContext, jumpToNextFavoriteMatch, skyVarsForMinute } from "./journey-context.js";
-import { renderJourneyNews, stopJourneyNewsCarousel, wireJourneyNewsCarousel } from "./journey-news.js";
-import { progressiveCampaign, renderCalendarDayCard, renderCampaignProgressHeader, renderIntroNav, renderJourneySituation, statusPill } from "./journey-components.js";
+import { stopJourneyNewsCarousel, wireJourneyNewsCarousel } from "./journey-news.js";
+import { renderIntroNav, statusPill } from "./journey-components.js";
 import { openDaySnapshot } from "./journey-snapshots.js";
-import { isMobileJourneyViewport, renderMobileJourneyApp, setJourneyLayoutIsMobile, wireMobileJourneyTabs } from "./journey-mobile.js";
+import { isMobileJourneyViewport, renderDesktopJourneyApp, renderMobileJourneyApp, setJourneyLayoutIsMobile, wireMobileJourneyTabs } from "./journey-mobile.js";
 import { pauseAutoAdvance, startAutoAdvance } from "./journey-auto-advance.js";
 import { openTacticPlanner } from "../match/lineup-editor.js";
 import { openMatchSimulator } from "../match/match-simulator.js";
@@ -259,18 +259,8 @@ function renderFavoriteTeamJourney(){
   const journeyHtml = isMobileJourney
     ? renderMobileJourneyApp(ctx, type, matches, revealed)
     : `${renderIntroNav("journey")}
-      <div class="max-w-7xl mx-auto">
-        <div class="grid xl:grid-cols-[1fr_1.08fr_1fr] gap-5 items-stretch">
-        ${renderCalendarDayCard(ctx, type)}
-        ${renderJourneyNews(ctx)}
-        ${renderJourneySituation(ctx)}
-      </div>
-        <div class="guided-card rounded-[2rem] p-4 sm:p-5 guided-enter mt-5">
-          <div class="mb-4">
-            ${renderCampaignProgressHeader(team, matches, revealed, "🏆 Campanha concluída!")}
-          </div>
-          ${progressiveCampaign(record)}
-        </div>
+      <div class="max-w-[1800px] mx-auto">
+        ${renderDesktopJourneyApp(ctx, type, matches, revealed)}
       </div>`;
 
   renderGuided(journeyHtml, `guided-${nextTone}`, transitionTone, skyVarsForMinute(ctx.journeyMinute));

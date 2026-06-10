@@ -89,6 +89,15 @@ function openLiveSubPicker(mode){
   if(match.home !== fav && match.away !== fav) return;
   if(mode === "live"){ clearInterval(appState.matchTimer); appState.matchTimer = null; }
   appState.liveSubPaused = true;
+  if(item) item.matchTab = "subs";
+  const shell = $("#matchScreenShell");
+  if(shell) shell.dataset.matchTab = "subs";
+  document.querySelectorAll("#matchSimulatorBox [data-match-tab]").forEach(btn => {
+    const active = btn.dataset.matchTab === "subs";
+    btn.classList.toggle("active", active);
+    if(active) btn.setAttribute("aria-current", "page");
+    else btn.removeAttribute("aria-current");
+  });
 
   const maxMinute = match.aet ? 120 : 90;
   const currentMinute = Math.max(1, Math.min(maxMinute - 1, item.minute || 1));
@@ -116,13 +125,6 @@ function openLiveSubPicker(mode){
 function liveSubMaxRows(){
   const {totalMax, info, benchPool} = liveSubCtx;
   return Math.max(1, Math.min(LIVE_SUB_PER_WINDOW, totalMax - info.total, benchPool.length));
-}
-
-function scrollLiveSubPlayers(button){
-  const list = button.closest(".lineup-player-carousel")?.querySelector(".lineup-scroll-target");
-  if(!list) return;
-  const dir = Number(button.dataset.lsPlayerScroll || 0);
-  list.scrollBy({top: dir * Math.max(90, Math.round(list.clientHeight * .78)), behavior:"smooth"});
 }
 
 // Registra uma troca (campo <- banco) no rascunho da janela atual.
@@ -278,9 +280,7 @@ function buildLiveSubCarousel(){
       ${liveSubPosGroups().map((g, idx) => `<button class="pos-carousel-dot ${idx === groupIndex ? 'active' : ''}" data-ls-dot="${idx}" title="${g.label}" aria-label="${g.label}"></button>`).join("")}
     </div>
     <div class="lineup-scroll-shell">
-      <button type="button" class="player-scroll-btn" data-ls-player-scroll="-1" aria-label="Rolar reservas para cima">${ic('chevron-up','w-4 h-4')}</button>
       <div class="lineup-scroll-target space-y-2">${cards || `<div class="text-sm text-slate-400 py-2 text-center font-semibold">Nenhum jogador</div>`}</div>
-      <button type="button" class="player-scroll-btn" data-ls-player-scroll="1" aria-label="Rolar reservas para baixo">${ic('chevron-down','w-4 h-4')}</button>
     </div>
   </div>`;
 }
@@ -374,9 +374,6 @@ function wireLiveSubPickerEvents(){
   });
   document.querySelectorAll("#liveSubMount [data-ls-dot]").forEach(btn => {
     btn.onclick = () => { liveSubCarouselIndex = Number(btn.dataset.lsDot); renderLiveSubPicker(); };
-  });
-  document.querySelectorAll("#liveSubMount [data-ls-player-scroll]").forEach(btn => {
-    btn.onclick = () => scrollLiveSubPlayers(btn);
   });
   // clique alternado: reserva seleciona quem entra, campo seleciona quem sai
   document.querySelectorAll("#liveSubMount [data-ls-player]").forEach(card => {
@@ -534,9 +531,17 @@ function confirmLiveSubs(){
   lastConfirmedSubs = picks.map(p => ({out:p.out, in:p.in}));
   clearLiveSubPicker();
   if(fresh){
-    appState.currentSimulatedMatch = {match:fresh, journeyIndex, minute:resumeMinute};
+    appState.currentSimulatedMatch = {match:fresh, journeyIndex, minute:resumeMinute, matchTab:"match"};
+    const shell = $("#matchScreenShell");
+    if(shell) shell.dataset.matchTab = "match";
+    document.querySelectorAll("#matchSimulatorBox [data-match-tab]").forEach(btn => {
+      const active = btn.dataset.matchTab === "match";
+      btn.classList.toggle("active", active);
+      if(active) btn.setAttribute("aria-current", "page");
+      else btn.removeAttribute("aria-current");
+    });
     simulateMatch(fresh, Math.max(0, resumeMinute));
   }
 }
 
-export { clearLiveSubPicker, consumeLastConfirmedSubs, openHalftimeBreak, openLiveSubPicker };
+export { cancelLiveSub, clearLiveSubPicker, consumeLastConfirmedSubs, openHalftimeBreak, openLiveSubPicker };

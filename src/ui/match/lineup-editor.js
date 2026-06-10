@@ -63,6 +63,7 @@ function openTacticPlanner(match, journeyIndex=0){
     mentality: base.mentality || "balanced",
     fieldPositions: base.positions || {},
     listPositionIndex: 0,
+    plannerTab: "lineup",
     fieldSelection: "",
     error: "",
   };
@@ -261,6 +262,12 @@ function setFormation(f){
   st.error = "";
   renderPlanner();
 }
+function cycleFormation(delta){
+  const current = WC_LINEUPS.FORMATIONS.indexOf(plannerState.formation);
+  const base = current < 0 ? 0 : current;
+  const next = (WC_LINEUPS.FORMATIONS.length + base + delta) % WC_LINEUPS.FORMATIONS.length;
+  setFormation(WC_LINEUPS.FORMATIONS[next]);
+}
 function toggleStarter(name){
   const st = plannerState;
   if(st.fieldSelection && !st.starters.includes(name)){
@@ -319,19 +326,12 @@ function movePositionCarousel(delta){
   plannerState.listPositionIndex = (POS_GROUPS.length + (plannerState.listPositionIndex||0) + delta) % POS_GROUPS.length;
   renderPlanner();
 }
-function scrollPlayerCarousel(button){
-  const list = button.closest(".lineup-player-carousel")?.querySelector(".lineup-scroll-target");
-  if(!list) return;
-  const dir = Number(button.dataset.playerScroll || 0);
-  list.scrollBy({top: dir * Math.max(96, Math.round(list.clientHeight * .78)), behavior:"smooth"});
-}
-
 /* ---------- render ---------- */
 function deltaPill(label, v){
   const up = v>0.05, down = v<-0.05;
   const cls = up?"text-mxgreen bg-mxgreen/10":down?"text-usared bg-usared/10":"text-slate-500 bg-slate-100";
   const arrow = up?"▲":down?"▼":"■";
-  return `<div class="flex-1 rounded-2xl px-3 py-2.5 ${cls}">
+  return `<div class="delta-pill flex-1 rounded-2xl px-3 py-2.5 ${cls}">
     <div class="text-[10px] uppercase tracking-widest font-extrabold opacity-70">${label}</div>
     <div class="font-display font-extrabold text-lg">${arrow} ${v>=0?"+":""}${v.toFixed(1)}</div>
   </div>`;
@@ -397,9 +397,24 @@ function positionBlock(group){
       <div class="text-[11px] font-extrabold rounded-full px-2 py-0.5 ${countCls}">${have}/${want}</div>
     </div>
     <div class="lineup-scroll-shell">
-      <button type="button" class="player-scroll-btn" data-player-scroll="-1" aria-label="Rolar jogadores para cima">${ic('chevron-up','w-4 h-4')}</button>
       <div class="lineup-scroll-target grid sm:grid-cols-2 gap-2">${players.map(playerChip).join("")}</div>
-      <button type="button" class="player-scroll-btn" data-player-scroll="1" aria-label="Rolar jogadores para baixo">${ic('chevron-down','w-4 h-4')}</button>
+    </div>
+  </div>`;
+}
+function formationSelector(){
+  const i = Math.max(0, WC_LINEUPS.FORMATIONS.indexOf(plannerState.formation));
+  const current = WC_LINEUPS.FORMATIONS[i] || plannerState.formation || "4-3-3";
+  return `<div class="formation-carousel">
+    <div class="flex items-center justify-between gap-3">
+      <button type="button" class="pos-carousel-btn formation-cycle-btn" data-formation-dir="-1" title="Esquema anterior">${ic('chevron-left','w-4 h-4')}</button>
+      <div class="text-center min-w-0">
+        <div class="text-[10px] uppercase tracking-widest font-extrabold text-slate-400">Esquema tático</div>
+        <div class="font-display font-extrabold text-xl leading-tight">${current}</div>
+      </div>
+      <button type="button" class="pos-carousel-btn formation-cycle-btn" data-formation-dir="1" title="Próximo esquema">${ic('chevron-right','w-4 h-4')}</button>
+    </div>
+    <div class="flex justify-center gap-1.5 mt-2">
+      ${WC_LINEUPS.FORMATIONS.map((f,idx)=>`<button class="pos-carousel-dot ${idx===i?'active':''}" data-formation-dot="${f}" title="${f}" aria-label="${f}"></button>`).join("")}
     </div>
   </div>`;
 }
@@ -469,8 +484,8 @@ function renderPlanner(){
       <p class="mt-1 text-sm text-slate-500 font-semibold">Técnico ${coach} · monte a escalação que vai a campo. Suas escolhas mudam o resultado.</p>
     </div>
 
-    <div class="mt-5 space-y-5">
-      <div class="guided-card rounded-3xl p-4">
+    <div class="planner-workspace mt-5" data-planner-tab="${st.plannerTab || 'lineup'}">
+      <div class="planner-screen planner-lineup-screen planner-lineup-panel guided-card rounded-3xl p-4">
         <div class="flex items-center justify-between mb-3">
           <div class="flex items-center gap-2">
             <div class="font-display font-extrabold text-lg">Escalação atual</div>
@@ -482,20 +497,19 @@ function renderPlanner(){
           <button id="autoLineup" class="text-xs font-extrabold text-usablue hover:underline flex items-center gap-1">${ic('wand-2','w-3.5 h-3.5')} Automática</button>
         </div>
         ${st.error?`<div class="mb-3 rounded-2xl bg-usared/10 border border-usared/20 px-3 py-2 text-sm font-bold text-usared">${st.error}</div>`:""}
-        ${renderLineupField()}
-        <div class="mt-4">
+        <div class="planner-lineup-field">
+          ${renderLineupField()}
+        </div>
+        <div class="mt-3">
+          ${formationSelector()}
+        </div>
+        <div class="mt-3">
           ${positionCarousel()}
         </div>
       </div>
 
-      <div class="grid lg:grid-cols-2 gap-4 items-start">
-        <div class="guided-card rounded-3xl p-4">
-          <div class="text-[11px] uppercase tracking-widest font-extrabold text-slate-400 mb-2">Esquema tático</div>
-          <div class="flex flex-wrap gap-2">
-            ${WC_LINEUPS.FORMATIONS.map(f=>`<button class="formation-btn rounded-xl px-3 py-1.5 text-sm font-extrabold border ${f===st.formation?'bg-ink text-white border-ink':'glass text-slate-600 border-white/70'}" data-f="${f}">${f}</button>`).join("")}
-          </div>
-        </div>
-
+      <div class="planner-screen planner-tactic-screen planner-controls-panel">
+        <div class="planner-control-grid">
         <div class="guided-card rounded-3xl p-4">
           <div class="text-[11px] uppercase tracking-widest font-extrabold text-slate-400 mb-2">Força vs escalação padrão</div>
           <div class="flex gap-2">
@@ -521,7 +535,7 @@ function renderPlanner(){
           <select id="captainSelect" class="w-full rounded-2xl border border-slate-200 px-3 py-2.5 font-bold text-sm">${captainOptions()}</select>
         </div>
 
-        <div class="guided-card rounded-3xl p-4 lg:col-span-2">
+        <div class="planner-control-wide guided-card rounded-3xl p-4">
           <div class="text-[11px] uppercase tracking-widest font-extrabold text-slate-400 mb-3">Cobradores</div>
           <div class="grid sm:grid-cols-2 gap-3">
             <div class="flex items-center gap-3">
@@ -543,8 +557,14 @@ function renderPlanner(){
         </div>
       </div>
     </div>
+    </div>
 
-    <div class="mt-5 flex flex-wrap items-center justify-between gap-3">
+    <div class="planner-tab-footer mt-3" aria-label="Navegação da preleção">
+      <button type="button" class="planner-tab-btn ${st.plannerTab !== 'tactic' ? 'active' : ''}" data-planner-tab="lineup">${ic('users','w-5 h-5')}<span>Escalação</span></button>
+      <button type="button" class="planner-tab-btn ${st.plannerTab === 'tactic' ? 'active' : ''}" data-planner-tab="tactic">${ic('clipboard-list','w-5 h-5')}<span>Tática</span></button>
+    </div>
+
+    <div class="mt-5 planner-action-bar flex flex-wrap items-center justify-between gap-3">
       <button id="cancelPlanner" class="glass rounded-2xl px-4 py-2.5 font-bold text-slate-600">Voltar</button>
       <div class="flex items-center gap-3">
         ${valid?'' : '<span class="text-xs font-extrabold text-amber-600">Complete o XI nas posições da formação</span>'}
@@ -557,6 +577,12 @@ function renderPlanner(){
 }
 
 function wirePlanner(){
+  document.querySelectorAll("#tacticPlannerBox .planner-tab-btn").forEach(b=> b.onclick=()=>{
+    plannerState.plannerTab = b.dataset.plannerTab === "tactic" ? "tactic" : "lineup";
+    renderPlanner();
+  });
+  document.querySelectorAll("#tacticPlannerBox [data-formation-dir]").forEach(b=> b.onclick=()=>cycleFormation(Number(b.dataset.formationDir||0)));
+  document.querySelectorAll("#tacticPlannerBox [data-formation-dot]").forEach(b=> b.onclick=()=>setFormation(b.dataset.formationDot));
   document.querySelectorAll("#tacticPlannerBox .formation-btn").forEach(b=> b.onclick=()=>setFormation(b.dataset.f));
   document.querySelectorAll("#tacticPlannerBox .mentality-btn").forEach(b=> b.onclick=()=>setMentality(b.dataset.m));
   document.querySelectorAll("#tacticPlannerBox .planner-player").forEach(b=> b.onclick=()=>{
@@ -565,7 +591,6 @@ function wirePlanner(){
   });
   document.querySelectorAll("#tacticPlannerBox .pos-carousel-btn").forEach(b=> b.onclick=()=>movePositionCarousel(Number(b.dataset.dir||0)));
   document.querySelectorAll("#tacticPlannerBox .pos-carousel-dot").forEach(b=> b.onclick=()=>{ plannerState.listPositionIndex=Number(b.dataset.posDot||0); renderPlanner(); });
-  document.querySelectorAll("#tacticPlannerBox [data-player-scroll]").forEach(b=> b.onclick=()=>scrollPlayerCarousel(b));
   document.querySelectorAll("#tacticPlannerBox [draggable='true'][data-name]").forEach(el=>{
     let pointerDrag=null;
     el.ondragstart=e=>{

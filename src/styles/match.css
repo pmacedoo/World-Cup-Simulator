@@ -4,6 +4,189 @@
    ================================================================= */
 
 /* ---------- painéis do simulador ---------- */
+#matchSimulatorBox,
+#tacticPlannerBox{
+  height:min(94dvh,920px);
+  max-height:94dvh;
+  overflow:hidden !important;
+  display:flex;
+  flex-direction:column;
+}
+#matchSimulatorBox > *,
+#tacticPlannerBox > *{
+  flex:none;
+}
+#matchSimulatorBox > .match-screen-shell{
+  flex:1 1 auto;
+  min-height:0;
+}
+#matchSimulatorBox #simInfoGrid{
+  flex:1;
+  min-height:0;
+}
+#matchSimulatorBox #liveSubMount{
+  min-height:0;
+}
+#matchSimulatorBox #liveSubMount:not(:empty){
+  flex:1;
+}
+#matchSimulatorBox #liveSubMount:not(:empty) + #simInfoGrid{
+  display:none;
+}
+#matchSimulatorBox #liveSubMount .guided-card{
+  height:100%;
+  max-height:100%;
+}
+#matchSimulatorBox #liveSubMount .ls-planner-layout{
+  height:calc(100% - 58px);
+  min-height:0;
+}
+#matchSimulatorBox #liveSubMount .lineup-player-carousel .space-y-2{
+  max-height:none;
+  overflow-y:scroll;
+}
+#matchSimulatorBox .match-event-panel,
+#matchSimulatorBox .match-summary-panel{
+  display:flex;
+  flex-direction:column;
+  overflow:hidden;
+}
+#matchSimulatorBox .match-scroll-area,
+#matchSimulatorBox .match-summary-scroll{
+  flex:1;
+  height:auto;
+  max-height:none;
+}
+.match-tab-footer{
+  flex:none;
+  display:grid;
+  grid-template-columns:repeat(3,1fr);
+  gap:8px;
+  margin-top:14px;
+  padding:6px;
+  border-radius:18px;
+  background:rgba(241,245,249,.82);
+  border:1px solid rgba(226,232,240,.92);
+}
+.match-tab-btn{
+  min-height:48px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:8px;
+  border-radius:14px;
+  color:#64748b;
+  font-size:12px;
+  font-weight:900;
+  transition:background .18s ease,color .18s ease,transform .18s ease;
+}
+.match-tab-btn.active{
+  color:var(--brand-blue);
+  background:#fff;
+  box-shadow:0 10px 26px -20px rgba(15,23,42,.45);
+}
+.match-tab-btn:disabled{
+  opacity:.45;
+  cursor:not-allowed;
+}
+.match-screen-shell{
+  flex:1;
+  min-height:0;
+  overflow:hidden;
+}
+.match-screen{
+  height:100%;
+  min-height:0;
+  display:none;
+}
+.match-screen-shell[data-match-tab="match"] .match-main-screen,
+.match-screen-shell[data-match-tab="subs"] .match-sub-screen,
+.match-screen-shell[data-match-tab="tactic"] .match-tactic-screen{
+  display:block;
+}
+.match-main-screen,
+.match-main-screen #simInfoGrid{
+  height:100%;
+  min-height:0;
+}
+.match-sub-screen,
+.match-tactic-screen{
+  overflow:hidden;
+}
+.match-tab-empty,
+.match-live-tactic{
+  height:100%;
+}
+.match-action-bar{
+  flex:none;
+}
+#tacticPlannerBox .planner-workspace{
+  flex:1;
+  min-height:0;
+  display:grid;
+  grid-template-columns:minmax(420px,1.1fr) minmax(330px,.9fr);
+  gap:16px;
+  align-items:stretch;
+  overflow:hidden;
+}
+#tacticPlannerBox .planner-screen{
+  min-height:0;
+  height:100%;
+}
+#tacticPlannerBox .planner-lineup-panel,
+#tacticPlannerBox .planner-controls-panel{
+  min-height:0;
+  overflow:hidden;
+}
+#tacticPlannerBox .planner-lineup-panel{
+  display:flex;
+  flex-direction:column;
+}
+#tacticPlannerBox .planner-lineup-field{
+  flex:1;
+  min-height:0;
+}
+#tacticPlannerBox .planner-lineup-field .lineup-field-wrap{
+  height:100%;
+}
+#tacticPlannerBox .planner-controls-panel{
+  display:flex;
+  flex-direction:column;
+  gap:12px;
+  overflow-y:scroll;
+  scrollbar-gutter:stable;
+  scrollbar-width:auto;
+  scrollbar-color:rgba(10,49,97,.55) rgba(226,232,240,.72);
+  padding-right:10px;
+}
+#tacticPlannerBox .planner-controls-panel::-webkit-scrollbar{
+  width:12px;
+}
+#tacticPlannerBox .planner-controls-panel::-webkit-scrollbar-track{
+  border-radius:999px;
+  background:rgba(226,232,240,.78);
+}
+#tacticPlannerBox .planner-controls-panel::-webkit-scrollbar-thumb{
+  border:3px solid rgba(226,232,240,.78);
+  border-radius:999px;
+  background:rgba(10,49,97,.62);
+}
+#tacticPlannerBox .planner-control-grid{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:12px;
+  align-items:start;
+}
+#tacticPlannerBox .planner-control-wide{
+  grid-column:1/-1;
+}
+.planner-tab-footer{
+  display:none;
+}
+.planner-action-bar{
+  flex:none;
+}
+
 .match-event-panel,
 .match-summary-panel{min-height:0;}
 .match-scroll-area{height:clamp(210px,32vh,320px);min-height:0;}
@@ -339,10 +522,35 @@
 .lineup-player-carousel .planner-player .text-\[10px\]{font-size:9px;}
 .lineup-player-carousel .grid{
   max-height:188px;
-  overflow-y:auto;
+  overflow-y:scroll;
   overscroll-behavior:contain;
-  padding-right:4px;
+  padding-right:10px;
   padding-bottom:6px;
+  scrollbar-gutter:stable;
+  scrollbar-width:auto;
+  scrollbar-color:rgba(10,49,97,.55) rgba(226,232,240,.72);
+}
+#liveSubMount .lineup-player-carousel .space-y-2{
+  overflow-y:scroll;
+  scrollbar-gutter:stable;
+  scrollbar-width:auto;
+  scrollbar-color:rgba(10,49,97,.55) rgba(226,232,240,.72);
+  padding-right:10px;
+}
+.lineup-player-carousel .grid::-webkit-scrollbar,
+#liveSubMount .lineup-player-carousel .space-y-2::-webkit-scrollbar{
+  width:12px;
+}
+.lineup-player-carousel .grid::-webkit-scrollbar-track,
+#liveSubMount .lineup-player-carousel .space-y-2::-webkit-scrollbar-track{
+  border-radius:999px;
+  background:rgba(226,232,240,.78);
+}
+.lineup-player-carousel .grid::-webkit-scrollbar-thumb,
+#liveSubMount .lineup-player-carousel .space-y-2::-webkit-scrollbar-thumb{
+  border:3px solid rgba(226,232,240,.78);
+  border-radius:999px;
+  background:rgba(10,49,97,.62);
 }
 .lineup-scroll-shell{
   display:grid;
@@ -352,23 +560,6 @@
   min-height:0;
   scroll-behavior:smooth;
 }
-.player-scroll-btn{
-  height:30px;
-  width:100%;
-  display:grid;
-  place-items:center;
-  border-radius:12px;
-  color:#475569;
-  background:rgba(255,255,255,.72);
-  border:1px solid rgba(226,232,240,.88);
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.65);
-  transition:transform .16s ease,background .16s ease,color .16s ease;
-}
-.player-scroll-btn:hover{
-  color:var(--brand-blue);
-  background:#fff;
-}
-.player-scroll-btn:active{transform:scale(.985);}
 .lineup-player-carousel .grid::after,
 #liveSubMount .lineup-player-carousel .space-y-2::after{
   content:"Mais jogadores abaixo";
@@ -417,6 +608,131 @@
   background:var(--brand-blue);
 }
 @media (max-width:640px){
+  #matchSimulatorBox,
+  #tacticPlannerBox{
+    height:96dvh;
+    max-height:96dvh;
+    border-radius:22px;
+  }
+  #tacticPlannerBox .planner-workspace{
+    display:block;
+    position:relative;
+    flex:1;
+    min-height:0;
+    overflow:hidden;
+  }
+  #tacticPlannerBox .planner-screen{
+    height:100%;
+    min-height:0;
+    display:none;
+  }
+  #tacticPlannerBox .planner-workspace[data-planner-tab="lineup"] .planner-lineup-screen,
+  #tacticPlannerBox .planner-workspace[data-planner-tab="tactic"] .planner-tactic-screen{
+    display:flex;
+  }
+  #tacticPlannerBox .planner-lineup-panel,
+  #tacticPlannerBox .planner-controls-panel{
+    padding:10px !important;
+  }
+  #tacticPlannerBox .planner-lineup-field{
+    min-height:0;
+  }
+  #tacticPlannerBox .planner-control-grid{
+    grid-template-columns:1fr 1fr;
+    gap:8px;
+    align-items:start;
+  }
+  #tacticPlannerBox .planner-control-grid > .guided-card{
+    height:auto;
+    min-height:0;
+    padding:8px !important;
+    border-radius:18px;
+  }
+  #tacticPlannerBox .planner-control-grid > .guided-card:nth-child(3),
+  #tacticPlannerBox .planner-control-wide{
+    grid-column:1/-1;
+  }
+  #tacticPlannerBox .planner-controls-panel p{
+    display:none;
+  }
+  #tacticPlannerBox .planner-controls-panel .text-\[11px\]{
+    margin-bottom:4px;
+  }
+  #tacticPlannerBox .planner-controls-panel .formation-btn{
+    padding:4px 3px;
+    border-radius:9px;
+    font-size:9.5px;
+    line-height:1;
+    min-height:24px;
+  }
+  #tacticPlannerBox .planner-controls-panel .formation-grid{
+    display:grid;
+    grid-template-columns:repeat(3,minmax(0,1fr));
+    gap:4px;
+  }
+  #tacticPlannerBox .planner-controls-panel .formation-grid .formation-btn{
+    width:100%;
+    padding-left:3px;
+    padding-right:3px;
+    white-space:nowrap;
+  }
+  #tacticPlannerBox .planner-controls-panel .delta-pill{
+    padding:6px 8px !important;
+    border-radius:14px;
+  }
+  #tacticPlannerBox .planner-controls-panel .delta-pill .font-display{
+    font-size:14px;
+    line-height:1.05;
+  }
+  #tacticPlannerBox .planner-controls-panel .delta-pill .text-\[10px\]{
+    font-size:8px;
+  }
+  #tacticPlannerBox .planner-controls-panel .mentality-btn{
+    padding:7px 6px;
+    border-radius:14px;
+  }
+  #tacticPlannerBox .planner-controls-panel .mentality-btn .font-extrabold{
+    font-size:12px;
+  }
+  #tacticPlannerBox .planner-controls-panel .mentality-btn .text-\[10px\]{
+    display:none;
+  }
+  #tacticPlannerBox .planner-controls-panel select{
+    min-height:36px;
+    padding-top:6px;
+    padding-bottom:6px;
+  }
+  #tacticPlannerBox .planner-controls-panel{
+    overflow:hidden;
+  }
+  .planner-tab-footer{
+    display:grid;
+    grid-template-columns:repeat(2,1fr);
+    gap:8px;
+    padding:6px;
+    border-radius:18px;
+    background:rgba(241,245,249,.82);
+    border:1px solid rgba(226,232,240,.92);
+  }
+  .planner-tab-btn{
+    min-height:48px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap:8px;
+    border-radius:14px;
+    color:#64748b;
+    font-size:12px;
+    font-weight:900;
+  }
+  .planner-tab-btn.active{
+    color:var(--brand-blue);
+    background:#fff;
+    box-shadow:0 10px 26px -20px rgba(15,23,42,.45);
+  }
+  #tacticPlannerBox .planner-action-bar{
+    margin-top:10px;
+  }
   .lineup-drop-slot{width:38px;height:38px;}
   .lineup-field-player{padding:3px;text-align:center;}
   .lineup-pos{width:15px;height:15px;font-size:6px;left:-3px;top:-3px;}
@@ -429,7 +745,6 @@
   .lineup-main.tiny{font-size:5.4px;}
   .lineup-player-carousel .grid{max-height:150px;}
   .lineup-player-carousel .planner-player{padding:6px 8px;}
-  .player-scroll-btn{height:34px;border-radius:14px;}
 }
 
 /* ---------- substituições em jogo (layout estilo planejador) ---------- */
@@ -558,12 +873,15 @@
   /* picker de substituição — empilha em coluna única */
   .ls-planner-layout{grid-template-columns:1fr;}
   .ls-carousel-col{border-left:none;border-top:1px solid rgba(0,0,0,.06);}
-  #liveSubMount .guided-card{max-height:78vh;overflow-y:auto;}
+  #liveSubMount .guided-card{max-height:100%;overflow:hidden;}
+  #matchSimulatorBox #liveSubMount .ls-planner-layout{
+    height:calc(100% - 54px);
+  }
   #liveSubMount .ls-field-col{padding:8px !important;}
   #liveSubMount .ls-carousel-col .p-4{padding:10px !important;}
   #liveSubMount .lineup-field-wrap{height:190px !important;}
   #liveSubMount .lineup-player-carousel{padding:8px;}
-  #liveSubMount .lineup-player-carousel .space-y-2{max-height:138px;overflow-y:auto;padding-right:4px;padding-bottom:6px;}
+  #liveSubMount .lineup-player-carousel .space-y-2{max-height:138px;overflow-y:scroll;scrollbar-gutter:stable;padding-right:4px;padding-bottom:6px;}
   #liveSubMount .ls-player-card{padding:6px 8px;border-radius:12px;}
   #liveSubMount .ls-pos-badge{width:30px;height:30px;border-radius:9px;font-size:9px;}
   /* planejador tático */

@@ -1,11 +1,9 @@
-
 /* =================================================================
-   JORNADA — LAYOUT MOBILE (app de abas com swipe)
+   JORNADA - LAYOUT RESPONSIVO EM PAINEIS
    -----------------------------------------------------------------
-   Em viewports móveis a jornada vira um app de 5 abas (jogo, notícias,
-   tabela, calendário e campanha) com navegação por toque. O listener
-   de resize re-renderiza apenas quando o layout efetivamente muda de
-   modo (mobile <-> desktop), com debounce.
+   Mobile: app de abas com footer e scroll-snap horizontal.
+   Desktop: os mesmos paineis aparecem lado a lado; se nao couberem,
+   o trilho tambem pode ser arrastado/rolado horizontalmente.
    ================================================================= */
 
 import { daysBetweenISO, parseMatchMinute } from "../../domain/matches/match-queries.js";
@@ -23,13 +21,10 @@ const MOBILE_JOURNEY_TABS = [
   {key:"calendar", label:"Jogos", icon:"calendar-days"},
   {key:"campaign", label:"Campanha", icon:"shield"},
 ];
-const MOBILE_SWIPE_MIN_X = 55;   // deslocamento mínimo p/ trocar de aba
 
 let journeyLayoutIsMobile = null;
 let journeyResizeTimer = null;
 
-// bindings importados são somente-leitura em ESM: quem renderiza a
-// jornada registra o layout atual por esta função, não por atribuição
 function setJourneyLayoutIsMobile(isMobile){ journeyLayoutIsMobile = isMobile; }
 
 function isMobileJourneyViewport(){
@@ -54,9 +49,9 @@ function currentMobileJourneyTab(){
   return MOBILE_JOURNEY_TABS.some(t => t.key === key) ? key : "game";
 }
 
-function setMobileJourneyTab(key){
+function setMobileJourneyTab(key, options = {render:true}){
   appState.mobileJourneyTab = MOBILE_JOURNEY_TABS.some(t => t.key === key) ? key : "game";
-  renderFavoriteTeamJourney();
+  if(options.render) renderFavoriteTeamJourney();
 }
 
 function mobileJourneyTitle(key){
@@ -94,7 +89,6 @@ function renderMobileCampaignPanel(ctx, matches, revealed){
 
 function renderMobileCalendarPanel(ctx){
   const {team, currentDay, dayMatches, journeyMinute} = ctx;
-  const visible = dayMatches;
   return `<div class="mobile-journey-panel-inner no-scroll">
     <div class="guided-card rounded-[2rem] p-4 guided-enter">
       <div class="flex items-center justify-between gap-3 mb-4">
@@ -105,7 +99,7 @@ function renderMobileCalendarPanel(ctx){
         ${ic('calendar-days','w-6 h-6 text-usablue')}
       </div>
       <div class="journey-scroll-list mobile-day-match-list space-y-2">
-        ${visible.length ? visible.map(m => {
+        ${dayMatches.length ? dayMatches.map(m => {
           const isFavorite = m.home === team || m.away === team;
           const watched = hasWatchedMatch(activeRecord(), m);
           const due = parseMatchMinute(m.time) <= journeyMinute;
@@ -158,7 +152,7 @@ function renderMobileNextFavoriteCard(ctx){
 }
 
 function renderMobileGamePanel(ctx, type){
-  const {team, currentDay, calendarDayIndex, days, finished, dayPhase, journeyMinute, dayMatches} = ctx;
+  const {team, currentDay, calendarDayIndex, days, finished, journeyMinute, dayMatches} = ctx;
   const dayNo = calendarDayIndex + 1;
   const totalDays = days.length || 1;
   const highlightMatches = dayMatches.slice(0, 2);
@@ -203,55 +197,110 @@ function renderMobileGamePanel(ctx, type){
   </div>`;
 }
 
+function journeyPanelDefinitions(ctx, type, matches, revealed){
+  return MOBILE_JOURNEY_TABS.map(tab => {
+    const html = tab.key === "news"
+      ? `<div class="mobile-journey-panel-inner no-scroll">${renderJourneyNews(ctx)}</div>`
+      : tab.key === "table"
+        ? `<div class="mobile-journey-panel-inner no-scroll">${renderJourneySituation(ctx, {showScouting:false})}</div>`
+        : tab.key === "calendar"
+          ? renderMobileCalendarPanel(ctx)
+          : tab.key === "campaign"
+            ? renderMobileCampaignPanel(ctx, matches, revealed)
+            : renderMobileGamePanel(ctx, type);
+    return {...tab, html};
+  });
+}
+
+function renderJourneyPanelsTrack(ctx, type, matches, revealed, mode){
+  const active = currentMobileJourneyTab();
+  const panels = journeyPanelDefinitions(ctx, type, matches, revealed);
+  return `<div id="journeyPanelsTrack" class="journey-panels-track ${mode}" data-active="${active}">
+    ${panels.map(panel => `<section class="journey-panel" data-panel-key="${panel.key}" aria-label="${panel.label}">
+      ${panel.html}
+    </section>`).join("")}
+  </div>`;
+}
+
 function renderMobileJourneyApp(ctx, type, matches, revealed){
   const active = currentMobileJourneyTab();
-  const activeIndex = MOBILE_JOURNEY_TABS.findIndex(t => t.key === active);
-  const panel = active === "news"
-    ? `<div class="mobile-journey-panel-inner no-scroll">${renderJourneyNews(ctx)}</div>`
-    : active === "table"
-      ? `<div class="mobile-journey-panel-inner no-scroll">${renderJourneySituation(ctx, {showScouting:false})}</div>`
-      : active === "calendar"
-        ? renderMobileCalendarPanel(ctx)
-        : active === "campaign"
-          ? renderMobileCampaignPanel(ctx, matches, revealed)
-          : renderMobileGamePanel(ctx, type);
+  const activeIndex = Math.max(0, MOBILE_JOURNEY_TABS.findIndex(t => t.key === active));
   return `<div class="mobile-journey-app" data-active-index="${activeIndex}">
     <div class="mobile-journey-topbar">
       <div class="min-w-0 text-center">
         <div class="text-[10px] uppercase tracking-widest font-extrabold text-slate-400">Jornada</div>
-        <div class="font-display font-extrabold text-xl leading-tight">${mobileJourneyTitle(active)}</div>
+        <div id="mobileJourneyTitle" class="font-display font-extrabold text-xl leading-tight">${mobileJourneyTitle(active)}</div>
       </div>
     </div>
     <main id="mobileJourneyViewport" class="mobile-journey-viewport" data-mobile-active="${active}">
-      ${panel}
+      ${renderJourneyPanelsTrack(ctx, type, matches, revealed, "mobile")}
     </main>
     ${renderMobileJourneyFooter(active)}
   </div>`;
 }
 
-// Troca de aba por toque (swipe horizontal) ou pelos botões do rodapé.
-function wireMobileJourneyTabs(){
-  document.querySelectorAll("[data-mobile-tab]").forEach(btn => btn.onclick = () => setMobileJourneyTab(btn.dataset.mobileTab));
+function renderDesktopJourneyApp(ctx, type, matches, revealed){
+  return `<div class="journey-desktop-shell guided-enter">
+    ${renderJourneyPanelsTrack(ctx, type, matches, revealed, "desktop")}
+  </div>`;
+}
+
+function syncJourneyTabUi(active){
+  const valid = MOBILE_JOURNEY_TABS.some(tab => tab.key === active) ? active : "game";
+  appState.mobileJourneyTab = valid;
   const viewport = $("#mobileJourneyViewport");
-  if(!viewport) return;
-  let startX = 0, startY = 0;
-  viewport.addEventListener("touchstart", e => {
-    const touch = e.touches[0];
-    if(!touch) return;
-    startX = touch.clientX;
-    startY = touch.clientY;
-  }, {passive:true});
-  viewport.addEventListener("touchend", e => {
-    const touch = e.changedTouches[0];
-    if(!touch) return;
-    const dx = touch.clientX - startX, dy = touch.clientY - startY;
-    // ignora gestos curtos ou predominantemente verticais (scroll)
-    if(Math.abs(dx) < MOBILE_SWIPE_MIN_X || Math.abs(dx) < Math.abs(dy) * 1.2) return;
-    const active = currentMobileJourneyTab();
-    const idx = MOBILE_JOURNEY_TABS.findIndex(tab => tab.key === active);
-    const next = (MOBILE_JOURNEY_TABS.length + idx + (dx < 0 ? 1 : -1)) % MOBILE_JOURNEY_TABS.length;
-    setMobileJourneyTab(MOBILE_JOURNEY_TABS[next].key);
+  if(viewport) viewport.dataset.mobileActive = valid;
+  const title = $("#mobileJourneyTitle");
+  if(title) title.textContent = mobileJourneyTitle(valid);
+  document.querySelector(".mobile-journey-app")?.setAttribute(
+    "data-active-index",
+    String(Math.max(0, MOBILE_JOURNEY_TABS.findIndex(tab => tab.key === valid)))
+  );
+  document.querySelectorAll("[data-mobile-tab]").forEach(btn => {
+    const isActive = btn.dataset.mobileTab === valid;
+    btn.classList.toggle("active", isActive);
+    if(isActive) btn.setAttribute("aria-current", "page");
+    else btn.removeAttribute("aria-current");
+  });
+}
+
+function scrollJourneyTrackTo(key, behavior = "smooth"){
+  const track = $("#journeyPanelsTrack");
+  const panel = track?.querySelector(`[data-panel-key="${key}"]`);
+  if(!track || !panel) return;
+  track.scrollTo({left:panel.offsetLeft - track.offsetLeft, behavior});
+}
+
+function wireMobileJourneyTabs(){
+  const track = $("#journeyPanelsTrack");
+  const active = currentMobileJourneyTab();
+  syncJourneyTabUi(active);
+  document.querySelectorAll("[data-mobile-tab]").forEach(btn => btn.onclick = () => {
+    setMobileJourneyTab(btn.dataset.mobileTab, {render:false});
+    syncJourneyTabUi(currentMobileJourneyTab());
+    scrollJourneyTrackTo(currentMobileJourneyTab());
+  });
+  if(!track) return;
+  requestAnimationFrame(() => scrollJourneyTrackTo(active, "auto"));
+
+  let ticking = false;
+  track.addEventListener("scroll", () => {
+    if(ticking) return;
+    ticking = true;
+    requestAnimationFrame(() => {
+      ticking = false;
+      const panels = Array.from(track.querySelectorAll("[data-panel-key]"));
+      if(!panels.length) return;
+      const center = track.scrollLeft + track.clientWidth / 2;
+      const closest = panels.reduce((best, panel) => {
+        const panelCenter = panel.offsetLeft + panel.offsetWidth / 2;
+        const distance = Math.abs(panelCenter - center);
+        return distance < best.distance ? {panel, distance} : best;
+      }, {panel:panels[0], distance:Infinity}).panel;
+      const nextKey = closest.dataset.panelKey || "game";
+      if(nextKey !== currentMobileJourneyTab()) syncJourneyTabUi(nextKey);
+    });
   }, {passive:true});
 }
 
-export { isMobileJourneyViewport, renderMobileJourneyApp, setJourneyLayoutIsMobile, wireMobileJourneyTabs };
+export { isMobileJourneyViewport, renderDesktopJourneyApp, renderMobileJourneyApp, setJourneyLayoutIsMobile, wireMobileJourneyTabs };
