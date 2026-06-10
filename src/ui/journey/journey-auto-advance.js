@@ -14,7 +14,7 @@
 import { absoluteJourneyMinute, dayPhaseForMinute, formatJourneyMinute, getMatchWinnerTeam, matchesWithAbsoluteMinutes } from "../../domain/matches/match-queries.js";
 import { activeRecord, appState, persistSims } from "../../state/simulation-store.js";
 import { flag } from "../render-helpers.js";
-import { canRevealMatchTeams, hasWatchedMatch, journeyVisibleContext, nightIntensityForMinute, periodInfoForMinute, revealCalendarMatch, skyVarsForMinute } from "./journey-context.js";
+import { canRevealMatchTeams, hasWatchedMatch, journeyVisibleContext, nextFavoriteCalendarMatch, nightIntensityForMinute, periodInfoForMinute, revealCalendarMatch, skyVarsForMinute } from "./journey-context.js";
 import { renderFavoriteTeamJourney } from "./journey-screens.js";
 
 let autoAdvanceRafId = null;
@@ -24,6 +24,51 @@ function startAutoAdvance(){
   appState.autoAdvancing = true;
   renderFavoriteTeamJourney();
   setTimeout(runAutoAdvance, 80);
+}
+
+// "Pular para meu jogo": vai DIRETO ao próximo jogo da favorita, revelando
+// os jogos intermediários em silêncio (sem banner de resultado). O relógio e
+// o céu avançam num único sweep contínuo até o horário do confronto — passa
+// os dias de forma limpa, sem parar para mostrar resultado de outros times.
+function skipToFavoriteMatch(){
+  if(appState.autoAdvancing) return;
+  const record = activeRecord();
+  if(!record) return;
+  const ctx = journeyVisibleContext(record);
+  if(ctx.finished || ctx.canPlayFavoriteToday){ renderFavoriteTeamJourney(); return; }
+  const target = nextFavoriteCalendarMatch(ctx);
+  if(!target){ renderFavoriteTeamJourney(); return; }
+
+  const fromAbs = absoluteJourneyMinute(record.calendarDayIndex, record.journeyMinute);
+  // revela (sem banner) todos os jogos pendentes até o jogo da favorita
+  matchesWithAbsoluteMinutes(ctx.days)
+    .filter(x => !hasWatchedMatch(record, x.match) && x.abs >= fromAbs && x.abs < target.abs)
+    .forEach(x => revealCalendarMatch(record, x.match));
+
+  // adversário ainda não revelável: só persiste o reveal e re-renderiza
+  const refreshed = journeyVisibleContext(record);
+  if(!canRevealMatchTeams(refreshed, target.match)){
+    persistSims();
+    renderFavoriteTeamJourney();
+    return;
+  }
+
+  appState.autoAdvancing = true;        // mostra "Pausar avanço" e trava o frame
+  renderFavoriteTeamJourney();
+  const jumpMinutes = Math.max(1, target.abs - fromAbs);
+  const duration = Math.max(1100, Math.min(3400, 700 + Math.sqrt(jumpMinutes) * 60));
+  setTimeout(() => {
+    if(!appState.autoAdvancing) return;
+    animateSkyTransition(record.calendarDayIndex, record.journeyMinute, target.dayIndex, target.minute, duration, () => {
+      if(!appState.autoAdvancing) return;
+      appState.autoAdvancing = false;
+      record.calendarDayIndex = target.dayIndex;
+      record.journeyMinute = target.minute;
+      record.dayPhase = dayPhaseForMinute(target.minute);
+      persistSims();
+      renderFavoriteTeamJourney();
+    });
+  }, 80);
 }
 
 function pauseAutoAdvance(){
@@ -163,4 +208,4 @@ function showAutoAdvanceBanner(match, onComplete){
   }, 1850);
 }
 
-export { pauseAutoAdvance, startAutoAdvance };
+export { pauseAutoAdvance, skipToFavoriteMatch, startAutoAdvance };

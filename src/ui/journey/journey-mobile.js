@@ -301,6 +301,38 @@ function wireMobileJourneyTabs(){
       if(nextKey !== currentMobileJourneyTab()) syncJourneyTabUi(nextKey);
     });
   }, {passive:true});
+
+  wireScrollHints();
 }
 
-export { isMobileJourneyViewport, renderDesktopJourneyApp, renderMobileJourneyApp, setJourneyLayoutIsMobile, wireMobileJourneyTabs };
+// Mostra "role para ver mais" só quando há conteúdo oculto abaixo. Um
+// ResizeObserver reavalia após redimensionamento da janela e mudanças
+// dinâmicas de conteúdo (além do próprio scroll).
+function wireScrollHints(){
+  document.querySelectorAll(".journey-scroll-list").forEach(list => {
+    const affordance = list.querySelector(".scroll-affordance");
+    const hint = list.parentElement?.querySelector(".mobile-scroll-hint");
+    if(!affordance && !hint) return;
+
+    function update(){
+      const hasMore = list.scrollHeight > list.clientHeight + list.scrollTop + 4;
+      if(affordance) affordance.classList.toggle("has-more", hasMore);
+      if(hint) hint.classList.toggle("has-more", hasMore);
+    }
+
+    list.removeEventListener("scroll", list._scrollHintHandler);
+    list._scrollHintHandler = update;
+    list.addEventListener("scroll", update, {passive:true});
+
+    if(typeof ResizeObserver !== "undefined"){
+      list._scrollHintObserver?.disconnect();
+      const ro = new ResizeObserver(update);
+      ro.observe(list);                       // muda quando a área visível muda
+      if(list.firstElementChild) ro.observe(list.firstElementChild); // ou o conteúdo
+      list._scrollHintObserver = ro;
+    }
+    requestAnimationFrame(update);
+  });
+}
+
+export { isMobileJourneyViewport, renderDesktopJourneyApp, renderMobileJourneyApp, setJourneyLayoutIsMobile, wireMobileJourneyTabs, wireScrollHints };

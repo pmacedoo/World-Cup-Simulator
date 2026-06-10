@@ -60,6 +60,7 @@ function openTacticPlanner(match, journeyIndex=0){
     captain: base.captain,
     penaltyTaker: base.penaltyTaker || "",
     freeKickTaker: base.freeKickTaker || "",
+    cornerTaker: base.cornerTaker || "",
     mentality: base.mentality || "balanced",
     fieldPositions: base.positions || {},
     listPositionIndex: 0,
@@ -89,6 +90,7 @@ function emptyTactic(team){
     captain: "",
     penaltyTaker: "",
     freeKickTaker: "",
+    cornerTaker: "",
     mentality: "balanced",
     liveScript: [],
     positions: {},
@@ -103,6 +105,7 @@ function clonePlannerBase(tactic){
     captain: base.captain || "",
     penaltyTaker: base.penaltyTaker || "",
     freeKickTaker: base.freeKickTaker || "",
+    cornerTaker: base.cornerTaker || "",
     mentality: base.mentality || "balanced",
     positions: Object.fromEntries(Object.entries(base.positions || {}).map(([name, pos]) => [name, {...pos}])),
     liveScript: [],
@@ -238,13 +241,15 @@ function plTactic(){
   const positions = Object.fromEntries(slotAssignments().filter(s=>s.name).map(s=>[s.name,slotPayload(s)]));
   const penaltyTaker = st.starters.includes(st.penaltyTaker) ? st.penaltyTaker : "";
   const freeKickTaker = st.starters.includes(st.freeKickTaker) ? st.freeKickTaker : "";
-  return { formation:st.formation, starters:st.starters.slice(), captain:st.captain, penaltyTaker, freeKickTaker, mentality:st.mentality, positions, liveScript:[] };
+  const cornerTaker = st.starters.includes(st.cornerTaker) ? st.cornerTaker : "";
+  return { formation:st.formation, starters:st.starters.slice(), captain:st.captain, penaltyTaker, freeKickTaker, cornerTaker, mentality:st.mentality, positions, liveScript:[] };
 }
 function sanitizeRoles(){
   const st = plannerState;
   if(!st.starters.includes(st.captain)) st.captain = WC_LINEUPS.pickCaptain(st.team, st.starters) || st.starters[0] || "";
   if(st.penaltyTaker && !st.starters.includes(st.penaltyTaker)) st.penaltyTaker = "";
   if(st.freeKickTaker && !st.starters.includes(st.freeKickTaker)) st.freeKickTaker = "";
+  if(st.cornerTaker && !st.starters.includes(st.cornerTaker)) st.cornerTaker = "";
 }
 
 /* ---------- mutações ---------- */
@@ -313,7 +318,7 @@ function resetAuto(){
   const st = plannerState;
   const auto = WC_LINEUPS.autoTactic(st.team);
   st.formation = auto.formation; st.starters = auto.starters.slice();
-  st.captain = auto.captain; st.penaltyTaker = ""; st.freeKickTaker = "";
+  st.captain = auto.captain; st.penaltyTaker = ""; st.freeKickTaker = ""; st.cornerTaker = "";
   st.mentality = "balanced"; st.fieldPositions = {}; st.fieldSelection = ""; st.error = "";
   orderStarters();
   renderPlanner();
@@ -348,7 +353,7 @@ function playerChip(name){
     ? "is-selected bg-slate-100 text-slate-400 border-slate-200"
     : "bg-white/70 text-slate-700 border-white hover:border-usablue/40";
   return `<button type="button" draggable="true" class="planner-player ${posToneClass(plPos(name))} flex items-center gap-2 rounded-2xl border px-3 py-2 text-left transition ${base}" data-name="${name}">
-    <span class="planner-player-badge w-9 h-9 rounded-xl grid place-items-center font-extrabold text-[11px]">${plPos(name)}</span>
+    <span class="planner-player-badge w-9 h-9 rounded-xl flex items-center justify-center font-extrabold text-[11px]">${plPos(name)}</span>
     <span class="min-w-0 flex-1">
       <span class="block font-bold text-sm truncate flex items-center gap-1">${name} ${star?'<span class="text-gold-400">★</span>':''}</span>
       <span class="block text-[10px] uppercase tracking-wider font-extrabold ${selected?'text-slate-400':'text-slate-400'}">${tit?'Titular base':'Reserva'}</span>
@@ -537,23 +542,30 @@ function renderPlanner(){
 
         <div class="planner-control-wide guided-card rounded-3xl p-4">
           <div class="text-[11px] uppercase tracking-widest font-extrabold text-slate-400 mb-3">Cobradores</div>
-          <div class="grid sm:grid-cols-2 gap-3">
-            <div class="flex items-center gap-3">
-              <span class="text-xs font-extrabold text-slate-500 w-20 shrink-0 flex items-center gap-1">${ic('circle-dot','w-3.5 h-3.5 text-usared')} Pênalti</span>
-              <select id="penTakerSelect" class="flex-1 rounded-2xl border border-slate-200 px-3 py-2 font-bold text-sm">
+          <div class="grid grid-cols-1 gap-2.5">
+            <label class="cobrador-row flex items-center gap-3">
+              <span class="text-xs font-extrabold text-slate-500 w-24 shrink-0 flex items-center gap-1.5">${ic('circle-dot','w-3.5 h-3.5 text-usared flex-none')} Pênalti</span>
+              <select id="penTakerSelect" class="flex-1 min-w-0 rounded-2xl border border-slate-200 px-3 py-2 font-bold text-sm">
                 <option value="">— automático —</option>
                 ${st.starters.filter(n=>plPos(n)!=="GK").map(n=>`<option value="${n}" ${n===st.penaltyTaker?'selected':''}>${n}</option>`).join("")}
               </select>
-            </div>
-            <div class="flex items-center gap-3">
-              <span class="text-xs font-extrabold text-slate-500 w-20 shrink-0 flex items-center gap-1">${ic('flame','w-3.5 h-3.5 text-gold-500')} Falta</span>
-              <select id="fkTakerSelect" class="flex-1 rounded-2xl border border-slate-200 px-3 py-2 font-bold text-sm">
+            </label>
+            <label class="cobrador-row flex items-center gap-3">
+              <span class="text-xs font-extrabold text-slate-500 w-24 shrink-0 flex items-center gap-1.5">${ic('flame','w-3.5 h-3.5 text-gold-500 flex-none')} Falta</span>
+              <select id="fkTakerSelect" class="flex-1 min-w-0 rounded-2xl border border-slate-200 px-3 py-2 font-bold text-sm">
                 <option value="">— automático —</option>
                 ${st.starters.filter(n=>plPos(n)!=="GK").map(n=>`<option value="${n}" ${n===st.freeKickTaker?'selected':''}>${n}</option>`).join("")}
               </select>
-            </div>
+            </label>
+            <label class="cobrador-row flex items-center gap-3">
+              <span class="text-xs font-extrabold text-slate-500 w-24 shrink-0 flex items-center gap-1.5">${ic('corner-down-right','w-3.5 h-3.5 text-usablue flex-none')} Escanteio</span>
+              <select id="cornerTakerSelect" class="flex-1 min-w-0 rounded-2xl border border-slate-200 px-3 py-2 font-bold text-sm">
+                <option value="">— automático —</option>
+                ${st.starters.filter(n=>plPos(n)!=="GK").map(n=>`<option value="${n}" ${n===st.cornerTaker?'selected':''}>${n}</option>`).join("")}
+              </select>
+            </label>
           </div>
-          <p class="mt-2.5 text-[10px] text-slate-400 font-semibold leading-snug">Escolha quem cobra pênaltis e faltas na partida. Afeta a narrativa e as cobranças na disputa.</p>
+          <p class="mt-2.5 text-[10px] text-slate-400 font-semibold leading-snug">Escolha quem cobra pênaltis, faltas e escanteios na partida. Afeta a narrativa e as cobranças na disputa.</p>
         </div>
       </div>
     </div>
@@ -589,8 +601,8 @@ function wirePlanner(){
     if(Date.now()<_plannerSuppressClickUntil || b.classList.contains("is-dragging")) return;
     toggleStarter(b.dataset.name);
   });
-  document.querySelectorAll("#tacticPlannerBox .pos-carousel-btn").forEach(b=> b.onclick=()=>movePositionCarousel(Number(b.dataset.dir||0)));
-  document.querySelectorAll("#tacticPlannerBox .pos-carousel-dot").forEach(b=> b.onclick=()=>{ plannerState.listPositionIndex=Number(b.dataset.posDot||0); renderPlanner(); });
+  document.querySelectorAll("#tacticPlannerBox [data-dir]").forEach(b=> b.onclick=()=>movePositionCarousel(Number(b.dataset.dir||0)));
+  document.querySelectorAll("#tacticPlannerBox [data-pos-dot]").forEach(b=> b.onclick=()=>{ plannerState.listPositionIndex=Number(b.dataset.posDot||0); renderPlanner(); });
   document.querySelectorAll("#tacticPlannerBox [draggable='true'][data-name]").forEach(el=>{
     let pointerDrag=null;
     el.ondragstart=e=>{
@@ -654,6 +666,7 @@ function wirePlanner(){
   const cap = $("#captainSelect"); if(cap) cap.onchange=()=>setCaptain(cap.value);
   const penSel = $("#penTakerSelect"); if(penSel) penSel.onchange=()=>{ plannerState.penaltyTaker=penSel.value; };
   const fkSel = $("#fkTakerSelect"); if(fkSel) fkSel.onchange=()=>{ plannerState.freeKickTaker=fkSel.value; };
+  const ckSel = $("#cornerTakerSelect"); if(ckSel) ckSel.onchange=()=>{ plannerState.cornerTaker=ckSel.value; };
   const auto = $("#autoLineup"); if(auto) auto.onclick=resetAuto;
   const cancel = $("#cancelPlanner"); if(cancel) cancel.onclick=()=>closeTacticPlanner(true);
   const confirm = $("#confirmPlanner"); if(confirm) confirm.onclick=confirmAndPlay;

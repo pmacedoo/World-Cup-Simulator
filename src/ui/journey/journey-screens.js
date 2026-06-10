@@ -18,8 +18,8 @@ import { journeyVisibleContext, jumpToNextFavoriteMatch, skyVarsForMinute } from
 import { stopJourneyNewsCarousel, wireJourneyNewsCarousel } from "./journey-news.js";
 import { renderIntroNav, statusPill } from "./journey-components.js";
 import { openDaySnapshot } from "./journey-snapshots.js";
-import { isMobileJourneyViewport, renderDesktopJourneyApp, renderMobileJourneyApp, setJourneyLayoutIsMobile, wireMobileJourneyTabs } from "./journey-mobile.js";
-import { pauseAutoAdvance, startAutoAdvance } from "./journey-auto-advance.js";
+import { isMobileJourneyViewport, renderDesktopJourneyApp, renderMobileJourneyApp, setJourneyLayoutIsMobile, wireMobileJourneyTabs, wireScrollHints } from "./journey-mobile.js";
+import { pauseAutoAdvance, skipToFavoriteMatch, startAutoAdvance } from "./journey-auto-advance.js";
 import { openTacticPlanner } from "../match/lineup-editor.js";
 import { openMatchSimulator } from "../match/match-simulator.js";
 import { flashLoader, renderAll } from "../../app/app.js";
@@ -192,6 +192,7 @@ function wireTeamPickerEvents(){
     appState.view = activeRecord()?.dashboardUnlocked ? "dashboard" : "journey";
     renderApp();
   };
+  wireScrollHints();
 }
 
 /* ---------- tela 2: escolha do tipo de simulação ---------- */
@@ -295,10 +296,7 @@ function wireJourneyEvents(ctx, matches, revealed, finished){
     openMatchSimulator(match, idx >= 0 ? idx : -1);
   });
   if($("#autoAdvanceClock")) $("#autoAdvanceClock").onclick = startAutoAdvance;
-  if($("#jumpToNextMatch")) $("#jumpToNextMatch").onclick = () => {
-    jumpToNextFavoriteMatch(activeRecord());
-    renderFavoriteTeamJourney();
-  };
+  if($("#jumpToNextMatch")) $("#jumpToNextMatch").onclick = skipToFavoriteMatch;
   if($("#pauseAutoAdvance")) $("#pauseAutoAdvance").onclick = pauseAutoAdvance;
   if($("#startJourney")) $("#startJourney").onclick = () => {
     if(matches[revealed] && !finished) openTacticPlanner(matches[revealed], revealed);
@@ -307,6 +305,7 @@ function wireJourneyEvents(ctx, matches, revealed, finished){
   if($("#journeyTypeBack")) $("#journeyTypeBack").onclick = changeSimulationType;
   if($("#resetGuidedSmall")) $("#resetGuidedSmall").onclick = resetGuidedExperience;
   wireMobileJourneyTabs();
+  wireScrollHints();
 }
 
 /* ---------- tela 4: confirmação do dashboard completo ---------- */

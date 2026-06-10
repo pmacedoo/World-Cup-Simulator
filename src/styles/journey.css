@@ -468,7 +468,9 @@
   font-weight:900;
   letter-spacing:.08em;
   text-transform:uppercase;
+  opacity:0;visibility:hidden;transition:opacity .25s,visibility .25s;
 }
+.mobile-scroll-hint.has-more{opacity:1;visibility:visible;}
 .mobile-scroll-hint::after{
   content:"";
   width:6px;

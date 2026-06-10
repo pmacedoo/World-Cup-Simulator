@@ -174,6 +174,7 @@ function cloneTactic(tactic, keepLiveScript = true){
     captain: tactic.captain || "",
     penaltyTaker: tactic.penaltyTaker || "",
     freeKickTaker: tactic.freeKickTaker || "",
+    cornerTaker: tactic.cornerTaker || "",
     mentality: tactic.mentality || "balanced",
     positions: Object.fromEntries(Object.entries(tactic.positions || {}).map(([name, pos]) => [name, {...pos}])),
     liveScript: keepLiveScript && Array.isArray(tactic.liveScript)

@@ -76,7 +76,52 @@ function clearLiveSubPicker(){
   liveSubFieldSelection = null;
 }
 
-function openHalftimeBreak(){ openLiveSubPicker("halftime"); }
+function openHalftimeBreak(){
+  // Mostra popup de intervalo primeiro; o usuário decide se faz trocas
+  const mount = $("#liveSubMount");
+  if(!mount) return;
+  appState.liveSubPaused = true;
+  const item = appState.currentSimulatedMatch;
+  if(!item) return;
+  const {match} = item;
+  const homeGoals = (match.goals || []).filter(g => g.team === match.home).length;
+  const awayGoals = (match.goals || []).filter(g => g.team === match.away).length;
+  const scoreHalf = `${homeGoals} × ${awayGoals}`;
+  // switch para aba "subs"
+  item.matchTab = "subs";
+  const shell = $("#matchScreenShell");
+  if(shell) shell.dataset.matchTab = "subs";
+  document.querySelectorAll("#matchSimulatorBox [data-match-tab]").forEach(btn => {
+    const active = btn.dataset.matchTab === "subs";
+    btn.classList.toggle("active", active);
+    if(active) btn.setAttribute("aria-current", "page");
+    else btn.removeAttribute("aria-current");
+  });
+  mount.innerHTML = `
+    <div class="guided-card rounded-3xl border-2 border-gold-400/50 halftime-modal">
+      <div class="halftime-modal-body">
+        <div class="halftime-modal-icon">${ic('coffee','w-8 h-8 text-gold-600')}</div>
+        <div class="halftime-modal-title">Intervalo</div>
+        <div class="halftime-modal-score">${scoreHalf}</div>
+        <div class="halftime-modal-subtitle">1º tempo encerrado</div>
+      </div>
+      <div class="halftime-modal-actions">
+        <button id="halftimeContinue" class="btn-premium text-white rounded-2xl px-5 py-3 font-extrabold flex-1">Continuar 2º tempo</button>
+        <button id="halftimeMakeSubs" class="glass rounded-2xl px-5 py-3 font-extrabold text-usablue flex-1">Fazer alterações</button>
+      </div>
+    </div>`;
+  paintIcons();
+  $("#halftimeContinue").onclick = () => {
+    clearLiveSubPicker();
+    simulateMatch(match, 45);
+  };
+  $("#halftimeMakeSubs").onclick = () => {
+    mount.innerHTML = "";
+    appState.liveSubPaused = false;
+    openLiveSubPicker("halftime");
+  };
+  mount.scrollIntoView({behavior:"smooth", block:"nearest"});
+}
 
 function openLiveSubPicker(mode){
   mode = mode === "halftime" ? "halftime" : "live";
@@ -332,12 +377,31 @@ function renderLiveSubPicker(){
     </div>`;
   }
 
+  const {fav, journeyIndex} = liveSubCtx;
+  const record = activeRecord();
+  const tactic = record && record.tactics && record.tactics[journeyIndex]
+    ? record.tactics[journeyIndex] : WC_LINEUPS.autoTactic(fav);
+  const formations = WC_LINEUPS.FORMATIONS || [];
+  const curFIdx = Math.max(0, formations.indexOf(tactic.formation || "4-3-3"));
+  const formationBar = formations.length > 1 ? `
+    <div class="ls-formation-selector mt-3">
+      <div class="text-[10px] uppercase tracking-widest font-extrabold text-slate-400 text-center mb-1.5">Esquema</div>
+      <div class="flex items-center gap-2 justify-center">
+        <button class="pos-carousel-btn ls-form-dir" data-ls-form-dir="-1" aria-label="Esquema anterior">${ic('chevron-left','w-4 h-4')}</button>
+        <span class="font-display font-extrabold text-xl min-w-[52px] text-center">${tactic.formation || "4-3-3"}</span>
+        <button class="pos-carousel-btn ls-form-dir" data-ls-form-dir="1" aria-label="Próximo esquema">${ic('chevron-right','w-4 h-4')}</button>
+      </div>
+      <div class="flex justify-center gap-1 mt-1.5">
+        ${formations.map((f, idx) => `<button class="pos-carousel-dot ${idx === curFIdx ? 'active' : ''}" data-ls-form-dot="${f}" title="${f}" aria-label="${f}"></button>`).join("")}
+      </div>
+    </div>` : "";
+
   mount.innerHTML = `
     <div class="guided-card rounded-3xl border-2 overflow-hidden ${isHalftime ? 'border-gold-400/50' : 'border-usablue/30'}">
       <div class="flex items-center justify-between px-4 pt-4 pb-2 gap-2">
         <div class="font-display font-extrabold text-lg flex items-center gap-2 min-w-0">
           ${ic(isHalftime ? 'coffee' : 'repeat-2', (isHalftime ? 'w-5 h-5 text-gold-600' : 'w-5 h-5 text-usablue') + ' flex-none')}
-          <span class="truncate">${isHalftime ? 'Intervalo · 1º tempo encerrado' : 'Substituições — ' + subMinute + "'"}</span>
+          <span class="truncate">${isHalftime ? 'Intervalo · alterações' : 'Substituições — ' + subMinute + "'"}</span>
         </div>
         <div class="flex items-center gap-2 flex-none">
           <div class="text-[11px] font-extrabold rounded-full px-2 py-0.5 ${info.total >= totalMax ? 'text-usared bg-usared/10' : 'text-slate-500 bg-slate-100'}">${counter}</div>
@@ -345,7 +409,11 @@ function renderLiveSubPicker(){
         </div>
       </div>
       <div class="ls-planner-layout">
-        <div class="ls-field-col p-4">${buildLiveSubField()}</div>
+        <div class="ls-field-col p-4">
+          ${buildLiveSubField()}
+          ${formationBar}
+          <div class="ls-swap-hint mt-2 text-center text-[10px] font-semibold text-slate-400">Arraste um jogador do campo para trocar de posição</div>
+        </div>
         <div class="ls-carousel-col">${rightPanel}</div>
       </div>
     </div>`;
@@ -412,12 +480,63 @@ function wireLiveSubPickerEvents(){
         liveSubFieldSelection = null;
         liveSubBenchSelection = null;
       } else {
-        liveSubFieldSelection = (liveSubFieldSelection === fieldPlayer) ? null : fieldPlayer;
-        renderLiveSubPicker();
+        // se já há um jogador de campo selecionado, faz swap de posição
+        if(liveSubFieldSelection && liveSubFieldSelection !== fieldPlayer){
+          handleFieldPositionSwap(liveSubFieldSelection, fieldPlayer);
+          liveSubFieldSelection = null;
+        } else {
+          liveSubFieldSelection = (liveSubFieldSelection === fieldPlayer) ? null : fieldPlayer;
+          renderLiveSubPicker();
+        }
       }
     };
   });
+  // seletor de formação no sub picker
+  document.querySelectorAll("#liveSubMount [data-ls-form-dir]").forEach(btn => {
+    btn.onclick = () => {
+      if(!liveSubCtx) return;
+      const {fav, journeyIndex} = liveSubCtx;
+      const record = activeRecord();
+      if(!record) return;
+      const cur = record.tactics?.[journeyIndex] || WC_LINEUPS.autoTactic(fav);
+      const formations = WC_LINEUPS.FORMATIONS || [];
+      const idx = formations.indexOf(cur.formation || "4-3-3");
+      const next = (formations.length + (idx < 0 ? 0 : idx) + Number(btn.dataset.lsFormDir)) % formations.length;
+      const newTactic = {...cur, starters:cur.starters.slice(), formation:formations[next]};
+      setMatchTactic(record, journeyIndex, newTactic);
+      renderLiveSubPicker();
+    };
+  });
+  document.querySelectorAll("#liveSubMount [data-ls-form-dot]").forEach(btn => {
+    btn.onclick = () => {
+      if(!liveSubCtx) return;
+      const {fav, journeyIndex} = liveSubCtx;
+      const record = activeRecord();
+      if(!record) return;
+      const cur = record.tactics?.[journeyIndex] || WC_LINEUPS.autoTactic(fav);
+      const newTactic = {...cur, starters:cur.starters.slice(), formation:btn.dataset.lsFormDot};
+      setMatchTactic(record, journeyIndex, newTactic);
+      renderLiveSubPicker();
+    };
+  });
   wireLiveSubDragAndDrop();
+}
+
+// Troca a posição de dois jogadores em campo (sem substituição)
+function handleFieldPositionSwap(nameA, nameB){
+  if(!liveSubCtx || !nameA || !nameB || nameA === nameB) return;
+  const {fav, journeyIndex} = liveSubCtx;
+  const record = activeRecord();
+  if(!record) return;
+  const tactic = record.tactics?.[journeyIndex] || WC_LINEUPS.autoTactic(fav);
+  const positions = {...(tactic.positions || {})};
+  const posA = positions[nameA] ? {...positions[nameA]} : null;
+  const posB = positions[nameB] ? {...positions[nameB]} : null;
+  if(posA) positions[nameB] = posA; else delete positions[nameB];
+  if(posB) positions[nameA] = posB; else delete positions[nameA];
+  const newTactic = {...tactic, positions};
+  setMatchTactic(record, journeyIndex, newTactic);
+  renderLiveSubPicker();
 }
 
 /* ---------- drag and drop (mouse + toque) ---------- */
@@ -434,6 +553,61 @@ function createLiveSubDragGhost(name){
 }
 
 function wireLiveSubDragAndDrop(){
+  // drag de bolha em campo → outra bolha (troca de posição)
+  document.querySelectorAll("#liveSubMount .sub-drop-target[data-field-name]").forEach(slot => {
+    const name = slot.dataset.fieldName;
+    let fieldPointerDrag = null;
+    const bubble = slot.querySelector(".lineup-field-player");
+    if(!bubble) return;
+    bubble.setAttribute("draggable", "true");
+    bubble.dataset.fieldDrag = name;
+    bubble.ondragstart = e => {
+      e.dataTransfer.effectAllowed = "move";
+      e.dataTransfer.setData("text/field", name);
+      slot.classList.add("is-field-dragging");
+      const ghost = createLiveSubDragGhost(name);
+      if(e.dataTransfer.setDragImage) e.dataTransfer.setDragImage(ghost, 23, 23);
+      setTimeout(() => ghost.remove(), 0);
+    };
+    bubble.ondragend = () => slot.classList.remove("is-field-dragging");
+    // touch drag
+    bubble.onpointerdown = e => {
+      if(e.pointerType === "mouse") return;
+      fieldPointerDrag = {name, moved:false, ghost:createLiveSubDragGhost(name)};
+      bubble.setPointerCapture?.(e.pointerId);
+      slot.classList.add("is-field-dragging");
+      fieldPointerDrag.ghost.style.left = `${e.clientX - 23}px`;
+      fieldPointerDrag.ghost.style.top = `${e.clientY - 23}px`;
+    };
+    bubble.onpointermove = e => {
+      if(!fieldPointerDrag) return;
+      fieldPointerDrag.moved = true;
+      fieldPointerDrag.ghost.style.left = `${e.clientX - 23}px`;
+      fieldPointerDrag.ghost.style.top = `${e.clientY - 23}px`;
+    };
+    bubble.onpointerup = e => {
+      if(!fieldPointerDrag) return;
+      const ghost = fieldPointerDrag.ghost;
+      ghost.style.display = "none";
+      const target = document.elementFromPoint(e.clientX, e.clientY)?.closest?.(".sub-drop-target[data-field-name]");
+      ghost.remove();
+      slot.classList.remove("is-field-dragging");
+      bubble.releasePointerCapture?.(e.pointerId);
+      const fromName = fieldPointerDrag.name;
+      const moved = fieldPointerDrag.moved;
+      fieldPointerDrag = null;
+      if(moved) liveSubSuppressClickUntil = Date.now() + 350;
+      if(target && target.dataset.fieldName !== fromName){
+        handleFieldPositionSwap(fromName, target.dataset.fieldName);
+        liveSubFieldSelection = null;
+      }
+    };
+    bubble.onpointercancel = e => {
+      if(fieldPointerDrag?.ghost) fieldPointerDrag.ghost.remove();
+      fieldPointerDrag = null;
+      slot.classList.remove("is-field-dragging");
+    };
+  });
   document.querySelectorAll("#liveSubMount [data-ls-bench='1'][draggable='true']").forEach(card => {
     let pointerDrag = null;
     card.ondragstart = e => {
@@ -492,8 +666,12 @@ function wireLiveSubDragAndDrop(){
     slot.ondrop = e => {
       e.preventDefault();
       slot.classList.remove("drag-over");
+      const fromField = e.dataTransfer.getData("text/field");
       const benchPlayer = e.dataTransfer.getData("text/plain");
-      if(benchPlayer){
+      if(fromField && fromField !== slot.dataset.fieldName){
+        handleFieldPositionSwap(fromField, slot.dataset.fieldName);
+        liveSubFieldSelection = null;
+      } else if(benchPlayer){
         handleSubDrop(slot.dataset.fieldName, benchPlayer);
         liveSubFieldSelection = null;
         liveSubBenchSelection = null;

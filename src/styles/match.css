@@ -180,6 +180,18 @@
 #tacticPlannerBox .planner-control-wide{
   grid-column:1/-1;
 }
+/* Força + Capitão dividem a 1ª linha; Postura e Cobradores ocupam linha
+   inteira (evita "Equilibrado" estourar numa coluna estreita). */
+#tacticPlannerBox .planner-control-grid > .guided-card:nth-child(1){order:1;}
+#tacticPlannerBox .planner-control-grid > .guided-card:nth-child(3){order:2;}
+#tacticPlannerBox .planner-control-grid > .guided-card:nth-child(2){order:3;grid-column:1/-1;}
+#tacticPlannerBox .planner-control-grid > .planner-control-wide{order:4;}
+/* postura: nunca deixa o rótulo vazar do botão */
+#tacticPlannerBox .mentality-btn{min-width:0;overflow:hidden;}
+#tacticPlannerBox .mentality-btn .font-extrabold{
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;
+}
+#tacticPlannerBox .mentality-btn > div{min-width:0;}
 .planner-tab-footer{
   display:none;
 }
@@ -416,6 +428,8 @@
   color:#64748b;
   opacity:.78;
 }
+/* o badge ecoa a bolinha colorida do campo (mesmo gradiente por posição) */
+.planner-player-badge{flex:none;}
 .planner-player.is-selected .planner-player-badge,
 .planner-player.is-dragging .planner-player-badge{
   background:var(--pos-soft,#e2e8f0);
@@ -423,9 +437,9 @@
   border:1px solid var(--pos-border,rgba(148,163,184,.32));
 }
 .planner-player:not(.is-selected):not(.is-dragging) .planner-player-badge{
-  background:var(--pos-soft,#f1f5f9);
-  color:var(--pos-text,#64748b);
-  border:1px solid var(--pos-border,rgba(148,163,184,.26));
+  background:linear-gradient(135deg,var(--pos-a,#64748b),var(--pos-b,#94a3b8));
+  color:#fff;
+  border:1px solid rgba(255,255,255,.18);
 }
 .planner-player.is-dragging{transform:scale(.985);}
 .lineup-field-player.is-dragging{
@@ -648,7 +662,6 @@
     padding:8px !important;
     border-radius:18px;
   }
-  #tacticPlannerBox .planner-control-grid > .guided-card:nth-child(3),
   #tacticPlannerBox .planner-control-wide{
     grid-column:1/-1;
   }
@@ -688,11 +701,17 @@
     font-size:8px;
   }
   #tacticPlannerBox .planner-controls-panel .mentality-btn{
-    padding:7px 6px;
+    padding:7px 4px;
     border-radius:14px;
+    min-width:0;
+    overflow:hidden;
   }
   #tacticPlannerBox .planner-controls-panel .mentality-btn .font-extrabold{
-    font-size:12px;
+    font-size:11px;
+    line-height:1.1;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
   }
   #tacticPlannerBox .planner-controls-panel .mentality-btn .text-\[10px\]{
     display:none;
@@ -747,11 +766,31 @@
   .lineup-player-carousel .planner-player{padding:6px 8px;}
 }
 
+/* ---------- popup de intervalo ---------- */
+.halftime-modal{display:flex;flex-direction:column;align-items:stretch;padding:32px 24px 24px;}
+.halftime-modal-body{display:flex;flex-direction:column;align-items:center;gap:8px;text-align:center;padding-bottom:24px;}
+.halftime-modal-icon{opacity:.85;}
+.halftime-modal-title{font-family:var(--font-display,sans-serif);font-weight:900;font-size:1.75rem;line-height:1;}
+.halftime-modal-score{font-family:var(--font-display,sans-serif);font-weight:900;font-size:2.5rem;line-height:1;letter-spacing:-.02em;}
+.halftime-modal-subtitle{font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#94a3b8;}
+.halftime-modal-actions{display:flex;flex-direction:column;gap:10px;}
+@media(min-width:480px){.halftime-modal-actions{flex-direction:row;}}
+
 /* ---------- substituições em jogo (layout estilo planejador) ---------- */
 /* duas colunas: campo à esquerda, carrossel e controles à direita */
-.ls-planner-layout{display:grid;grid-template-columns:1.1fr .9fr;align-items:start;min-height:0;}
+.ls-planner-layout{display:grid;grid-template-columns:1.1fr .9fr;align-items:stretch;min-height:0;}
 .ls-field-col{min-width:0;}
-.ls-carousel-col{min-width:0;border-left:1px solid rgba(0,0,0,.06);}
+.ls-carousel-col{min-width:0;border-left:1px solid rgba(0,0,0,.06);display:flex;flex-direction:column;}
+/* Desktop/tablet: o painel direito tem altura fixa; só a LISTA de jogadores
+   rola por dentro, mantendo os botões de confirmar sempre visíveis. No mobile
+   (single-column) tudo flui e quem rola é o #liveSubMount. */
+@media(min-width:640px){
+  #liveSubMount .ls-carousel-col > div{display:flex;flex-direction:column;flex:1;min-height:0;}
+  #liveSubMount .ls-carousel-col .lineup-player-carousel{flex:1;min-height:0;display:flex;flex-direction:column;}
+  #liveSubMount .ls-carousel-col .lineup-scroll-shell{flex:1;min-height:0;overflow-y:auto;display:block;}
+  /* a lista interna não rola sozinha (evita scrollbar duplo); o shell rola */
+  #liveSubMount .ls-carousel-col .lineup-player-carousel .lineup-scroll-target{overflow:visible;min-height:0;}
+}
 /* badge de formação sobre o campo */
 .ls-formation-badge{position:absolute;top:8px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.62);color:#fff;font-size:11px;font-weight:800;padding:2px 9px;border-radius:8px;pointer-events:none;z-index:5;}
 /* estados das bolhas no campo */
@@ -759,6 +798,12 @@
 @keyframes subOutPulse{from{box-shadow:0 0 0 0 rgba(179,25,66,.0)}to{box-shadow:0 0 0 4px rgba(179,25,66,.45)}}
 .ls-field-sel-bubble{background:linear-gradient(135deg,var(--gold-600),var(--gold-400)) !important;border-color:rgba(245,210,114,.5) !important;}
 .sub-drop-target[data-field-name]:not([data-field-pos="GK"]){cursor:pointer;}
+.sub-drop-target.is-field-dragging .lineup-field-player{opacity:.4;}
+.sub-drop-target.drag-over:not(.is-field-dragging) .lineup-field-player{box-shadow:0 0 0 3px #f5d272,0 0 0 7px rgba(245,210,114,.22) !important;transform:scale(1.1) !important;}
+/* seletor de formação dentro do sub picker */
+.ls-formation-selector{background:rgba(255,255,255,.5);border-radius:14px;border:1px solid rgba(255,255,255,.7);padding:8px 10px;}
+.ls-swap-hint{display:none;}
+@media(min-width:640px){.ls-swap-hint{display:block;}}
 /* cards de jogador no carrossel */
 .ls-player-card{display:flex;align-items:center;gap:8px;border-radius:14px;border:1.5px solid var(--pos-border,rgba(0,0,0,.08));padding:8px 10px;text-align:left;width:100%;background:rgba(255,255,255,.7);transition:background .12s,border-color .12s;}
 .ls-player-card[draggable="true"]{touch-action:none;cursor:grab;}
@@ -870,18 +915,19 @@
   .sim-header{flex-wrap:wrap;gap:6px;padding:8px 10px;}
   .sim-score-row{font-size:34px !important;}
   .sim-action-bar{flex-wrap:wrap;gap:6px;}
-  /* picker de substituição — empilha em coluna única */
+  /* picker de substituição — empilha em coluna única e rola */
   .ls-planner-layout{grid-template-columns:1fr;}
   .ls-carousel-col{border-left:none;border-top:1px solid rgba(0,0,0,.06);}
-  #liveSubMount .guided-card{max-height:100%;overflow:hidden;}
-  #matchSimulatorBox #liveSubMount .ls-planner-layout{
-    height:calc(100% - 54px);
-  }
+  #matchSimulatorBox #liveSubMount{overflow-y:auto;overflow-x:hidden;}
+  #matchSimulatorBox #liveSubMount .guided-card{height:auto;max-height:none;overflow:visible;}
+  #matchSimulatorBox #liveSubMount .ls-planner-layout{height:auto;}
   #liveSubMount .ls-field-col{padding:8px !important;}
   #liveSubMount .ls-carousel-col .p-4{padding:10px !important;}
   #liveSubMount .lineup-field-wrap{height:190px !important;}
   #liveSubMount .lineup-player-carousel{padding:8px;}
-  #liveSubMount .lineup-player-carousel .space-y-2{max-height:138px;overflow-y:scroll;scrollbar-gutter:stable;padding-right:4px;padding-bottom:6px;}
+  #liveSubMount .lineup-player-carousel .space-y-2{max-height:none;overflow-y:visible;}
+  /* sem scroll interno no mobile → some o aviso "mais jogadores abaixo" */
+  #liveSubMount .lineup-player-carousel .space-y-2::after{display:none;}
   #liveSubMount .ls-player-card{padding:6px 8px;border-radius:12px;}
   #liveSubMount .ls-pos-badge{width:30px;height:30px;border-radius:9px;font-size:9px;}
   /* planejador tático */

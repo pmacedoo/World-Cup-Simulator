@@ -133,7 +133,9 @@ html.js .reveal.in{opacity:1;transform:none;transition:opacity .6s ease,transfor
   text-transform:uppercase;
   pointer-events:none;
   background:linear-gradient(180deg,rgba(255,255,255,0),rgba(255,255,255,.92) 42%,rgba(255,255,255,.96));
+  opacity:0;visibility:hidden;transition:opacity .25s,visibility .25s;
 }
+.scroll-affordance.has-more{opacity:1;visibility:visible;}
 .scroll-affordance::after{
   content:"";
   width:6px;

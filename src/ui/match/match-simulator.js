@@ -96,16 +96,20 @@ function currentTacticForMatch(match){
 }
 
 // Lista ordenada de eventos exibíveis. Os gols da favorita respeitam os
-// cobradores designados na tática (pênalti / falta), quando definidos.
+// cobradores designados na tática (pênalti / falta / escanteio), quando
+// definidos. Cabeçadas com assistência são creditadas ao batedor de
+// escanteio — a jogada de bola parada mais comum a gerar gol de cabeça.
 function buildMatchEvents(match, favoriteTeam, tactic, options = {}){
   const includeSubstitutions = !!options.includeSubstitutions;
   const goals = (match.goals || []).map(goal => {
     let player = goal.player;
+    let assist = goal.assist;
     if(tactic && goal.team === favoriteTeam){
       if(goal.type === "de pênalti" && tactic.penaltyTaker) player = tactic.penaltyTaker;
       else if(goal.type === "cobrança de falta" && tactic.freeKickTaker) player = tactic.freeKickTaker;
+      else if(goal.type === "cabeçada" && goal.assist && tactic.cornerTaker && tactic.cornerTaker !== player) assist = tactic.cornerTaker;
     }
-    return {...goal, player, kind:"goal", norm:normalizeGoalMinute(goal.minute, match)};
+    return {...goal, player, assist, kind:"goal", norm:normalizeGoalMinute(goal.minute, match)};
   });
   const yellows = (match.yellows || []).map(y => ({...y, kind:"yellow", norm:normalizeGoalMinute(y.minute, match)}));
   return [...goals, ...(includeSubstitutions ? groupSubstitutionWindows(match) : []), ...yellows]
