@@ -12,7 +12,7 @@ import { TEAMS } from "../../data/worldcup-data.js";
 import { WC_LINEUPS } from "../../engine/lineups.js";
 import { getTeamMatches } from "../../domain/matches/match-queries.js";
 import { activeRecord, currentSim, setDefaultTactic, setMatchTactic } from "../../state/simulation-store.js";
-import { $, UI, cx, el, flag, getFavoriteTeam, ic, paintIcons } from "../render-helpers.js";
+import { $, UI, cx, el, flag, getFavoriteTeam, ic, paintIcons, playerCard } from "../render-helpers.js";
 import { renderFavoriteTeamJourney } from "../journey/journey-screens.js";
 import { openMatchSimulator } from "./match-simulator.js";
 
@@ -349,17 +349,14 @@ function playerChip(name){
   const selected = st.starters.includes(name);
   const isCap = st.captain===name && selected;
   const star = plStar(name), tit = plTitular(name);
-  const base = selected
-    ? "is-selected bg-slate-100 text-slate-400 border-slate-200"
-    : "bg-white/70 text-slate-700 border-white hover:border-usablue/40";
-  return `<button type="button" draggable="true" class="planner-player ${posToneClass(plPos(name))} flex items-center gap-2 rounded-2xl border px-3 py-2 text-left transition ${base}" data-name="${name}">
-    <span class="planner-player-badge w-9 h-9 rounded-xl flex items-center justify-center font-extrabold text-[11px]">${plPos(name)}</span>
-    <span class="min-w-0 flex-1">
-      <span class="block font-bold text-sm truncate flex items-center gap-1">${name} ${star?'<span class="text-gold-400">★</span>':''}</span>
-      <span class="block text-[10px] uppercase tracking-wider font-extrabold ${selected?'text-slate-400':'text-slate-400'}">${tit?'Titular base':'Reserva'}</span>
-    </span>
-    ${isCap?'<span class="flex-none w-6 h-6 rounded-full bg-gold-400 text-ink grid place-items-center font-extrabold text-[11px]">C</span>':''}
-    ${selected?'<span class="flex-none text-slate-400">'+ic('check','w-4 h-4')+'</span>':''}
+  const tag = selected ? "Escalado" : (tit ? "Titular base" : "Reserva");
+  const tagCls = selected ? "text-mxgreen" : "text-slate-400";
+  const tagInner = selected
+    ? ic('check','w-3 h-3') + tag
+    : (star ? '<span class="text-gold-500">★</span> ' : '') + tag;
+  return `<button type="button" draggable="true" class="planner-player planner-card ${selected?'is-selected':''}" data-name="${name}">
+    ${playerCard(name, { team: st.team, size: "sm", captain: isCap })}
+    <span class="planner-card-tag ${tagCls}">${tagInner}</span>
   </button>`;
 }
 function renderLineupField(){
@@ -402,7 +399,7 @@ function positionBlock(group){
       <div class="text-[11px] font-extrabold rounded-full px-2 py-0.5 ${countCls}">${have}/${want}</div>
     </div>
     <div class="lineup-scroll-shell">
-      <div class="lineup-scroll-target grid sm:grid-cols-2 gap-2">${players.map(playerChip).join("")}</div>
+      <div class="lineup-scroll-target planner-card-grid">${players.map(playerChip).join("")}</div>
     </div>
   </div>`;
 }

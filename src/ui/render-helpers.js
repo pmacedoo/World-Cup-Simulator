@@ -155,4 +155,46 @@ function getFavoriteTeam(){
   return activeRecord()?.favoriteTeam || appState.draftTeam || null;
 }
 
-export { $, UI, cx, el, flag, getAllTeamsFromSimulation, getFavoriteTeam, ic, matchScheduleLine, paintIcons, pill, renderSimulationTypeBadge, renderSimulationTypeControls, rowDot, scoreLine, statusBadge, uiConfirm, zebraTeam };
+/* ---------- cartinha de jogador (estilo FIFA, dourada) ---------- */
+// Nome no formato "primeiro nome + sobrenome abreviado": "Neymar J.",
+// "Gabriel M.", "Marquinhos" (nome único fica inteiro). Nomes que já vêm
+// abreviados no início ("L. Messi", "E. Shomurodov") são mantidos como estão.
+function playerDisplayName(name){
+  const parts = String(name || "").trim().split(/\s+/).filter(Boolean);
+  if(parts.length <= 1) return parts[0] || "";
+  if(/^\p{L}\.?$/u.test(parts[0])) return parts.join(" ");
+  const initial = parts[parts.length - 1].charAt(0).toUpperCase();
+  return `${parts[0]} ${initial}.`;
+}
+
+// Monta a cartinha dourada do jogador (string HTML, pronta p/ innerHTML).
+// Aceita string (nome) ou objeto { name, team|nationality, overall, pos,
+// tags, captain }. Campos faltando são resolvidos de TEAMS[team].sq quando há
+// `team`. options: { size:"sm"|"md"|"lg", team, captain }.
+function playerCard(input, options = {}){
+  const data = typeof input === "string" ? { name: input } : (input || {});
+  const name = data.name || "";
+  const team = data.team || data.nationality || options.team || null;
+  let overall = data.overall, pos = data.pos, tags = data.tags || "";
+  if((overall == null || pos == null) && team && TEAMS[team]){
+    const raw = TEAMS[team].sq.find(p => p[0] === name);
+    if(raw){
+      if(overall == null) overall = raw[2];
+      if(pos == null) pos = raw[1];
+      if(!tags) tags = raw[3] || "";
+    }
+  }
+  const captain = data.captain || options.captain || false;
+  const sizeCls = options.size === "sm" ? "playercard-sm" : options.size === "lg" ? "playercard-lg" : "";
+  return `<div class="playercard ${sizeCls}" data-name="${name}">
+    <div class="playercard-top">
+      <span class="playercard-ovr">${overall != null ? overall : "—"}</span>
+      <span class="playercard-pos">${pos || ""}</span>
+    </div>
+    <div class="playercard-flag">${team ? flag(team) : ""}</div>
+    ${captain ? '<span class="playercard-cap">C</span>' : ""}
+    <div class="playercard-name">${playerDisplayName(name)}</div>
+  </div>`;
+}
+
+export { $, UI, cx, el, flag, getAllTeamsFromSimulation, getFavoriteTeam, ic, matchScheduleLine, paintIcons, pill, playerCard, playerDisplayName, renderSimulationTypeBadge, renderSimulationTypeControls, rowDot, scoreLine, statusBadge, uiConfirm, zebraTeam };

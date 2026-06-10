@@ -81,6 +81,60 @@
 .profile-dramatic{--profile:var(--brand-red);--profile-soft:rgba(179,25,66,.14);}
 .profile-badge{background:var(--profile-soft);color:var(--profile);border:1px solid color-mix(in srgb,var(--profile) 28%,transparent);}
 
+/* ---------- cartinha de jogador (estilo FIFA, dourada) ---------- */
+.playercard{
+  position:relative;
+  width:86px;
+  aspect-ratio:5/7;
+  flex:none;
+  display:flex;
+  flex-direction:column;
+  padding:8px 7px 9px;
+  border-radius:15px;
+  color:#43330a;
+  background:linear-gradient(155deg,#fdeeb0 0%,#f5d272 26%,#eabf52 58%,#cf9e34 100%);
+  box-shadow:0 8px 20px -8px rgba(184,134,38,.65),inset 0 1px 0 rgba(255,255,255,.6),inset 0 0 0 1px rgba(255,255,255,.28);
+  overflow:hidden;
+  isolation:isolate;
+}
+.playercard::after{
+  content:"";
+  position:absolute;inset:0;z-index:-1;
+  background:linear-gradient(115deg,transparent 38%,rgba(255,255,255,.5) 50%,transparent 62%);
+}
+.playercard-top{display:flex;align-items:flex-start;justify-content:flex-start;gap:5px;line-height:1;}
+.playercard-ovr{font-family:"Sora",system-ui,sans-serif;font-weight:800;font-size:21px;letter-spacing:-.02em;}
+.playercard-pos{font-weight:800;font-size:9px;letter-spacing:.06em;margin-top:2px;opacity:.78;}
+.playercard-flag{position:absolute;top:8px;right:7px;}
+.playercard-flag .flag-img{width:19px;height:14px;border-radius:3px;box-shadow:0 0 0 1px rgba(67,51,10,.18);}
+.playercard-cap{
+  position:absolute;top:30px;right:7px;
+  width:15px;height:15px;border-radius:50%;
+  display:grid;place-items:center;
+  font-weight:800;font-size:9px;
+  background:rgba(67,51,10,.85);color:#f5d272;
+}
+.playercard-name{
+  margin-top:auto;
+  padding-top:5px;
+  border-top:1px solid rgba(67,51,10,.28);
+  font-family:"Sora",system-ui,sans-serif;
+  font-weight:800;font-size:11px;line-height:1.1;
+  text-align:center;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.playercard-sm{width:64px;padding:6px 5px 7px;border-radius:12px;}
+.playercard-sm .playercard-ovr{font-size:16px;}
+.playercard-sm .playercard-pos{font-size:8px;}
+.playercard-sm .playercard-flag .flag-img{width:15px;height:11px;}
+.playercard-sm .playercard-cap{top:24px;width:13px;height:13px;font-size:8px;}
+.playercard-sm .playercard-name{font-size:9px;padding-top:4px;}
+.playercard-lg{width:112px;padding:11px 9px 12px;border-radius:18px;}
+.playercard-lg .playercard-ovr{font-size:28px;}
+.playercard-lg .playercard-pos{font-size:11px;}
+.playercard-lg .playercard-flag .flag-img{width:24px;height:18px;}
+.playercard-lg .playercard-name{font-size:13px;}
+
 /* ---------- navegação em telas pequenas ---------- */
 @media (max-width:639px){
   nav.app-nav{padding:0 12px;}

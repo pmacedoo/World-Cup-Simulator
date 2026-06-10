@@ -16,7 +16,7 @@ import { TEAMS } from "../../data/worldcup-data.js";
 import { WC_LINEUPS } from "../../engine/lineups.js";
 import { getTeamMatches } from "../../domain/matches/match-queries.js";
 import { activeRecord, appState, currentSim, setMatchTactic } from "../../state/simulation-store.js";
-import { $, UI, cx, getFavoriteTeam, ic, paintIcons } from "../render-helpers.js";
+import { $, UI, cx, getFavoriteTeam, ic, paintIcons, playerCard } from "../render-helpers.js";
 import { FIELD_IMAGE_URL, POS_GROUPS } from "./lineup-editor.js";
 import { simulateMatch } from "./match-simulator.js";
 const LIVE_SUB_PER_WINDOW = 3;      // até 3 trocas na MESMA parada
@@ -84,8 +84,10 @@ function openHalftimeBreak(){
   const item = appState.currentSimulatedMatch;
   if(!item) return;
   const {match} = item;
-  const homeGoals = (match.goals || []).filter(g => g.team === match.home).length;
-  const awayGoals = (match.goals || []).filter(g => g.team === match.away).length;
+  // placar do INTERVALO: só os gols do 1º tempo (minuto <= 45), senão mostraria o placar final
+  const firstHalf = (match.goals || []).filter(g => (g.minute | 0) <= 45);
+  const homeGoals = firstHalf.filter(g => g.team === match.home).length;
+  const awayGoals = firstHalf.filter(g => g.team === match.away).length;
   const scoreHalf = `${homeGoals} × ${awayGoals}`;
   // switch para aba "subs"
   item.matchTab = "subs";
@@ -298,17 +300,13 @@ function buildLiveSubCarousel(){
     if(isFieldSel || isBenchSel) extraCls = "ls-player-sel";
     else if(isOut || isIn) extraCls = "ls-player-used";
     else if(!canInteract) extraCls = "opacity-50 pointer-events-none";
-    const icon = isOut ? ic('arrow-up-from-line','w-3.5 h-3.5 flex-none')
-      : isIn ? ic('arrow-down-to-line','w-3.5 h-3.5 flex-none')
-      : isFieldSel || isBenchSel ? ic('check','w-3.5 h-3.5 flex-none') : "";
-    return `<button type="button" class="ls-player-card pos-tone-${group.pos.toLowerCase()} ${extraCls}" draggable="${isBench && !isIn && !isOut ? 'true' : 'false'}"
+    const icon = isOut ? ic('arrow-up-from-line','w-3 h-3 flex-none')
+      : isIn ? ic('arrow-down-to-line','w-3 h-3 flex-none')
+      : isFieldSel || isBenchSel ? ic('check','w-3 h-3 flex-none') : "";
+    return `<button type="button" class="ls-card ${extraCls}" draggable="${isBench && !isIn && !isOut ? 'true' : 'false'}"
       data-ls-player="${name}" data-ls-field="${isOnField ? '1' : ''}" data-ls-bench="${isBench ? '1' : ''}">
-      <span class="ls-pos-badge">${group.pos}</span>
-      <span class="min-w-0 flex-1">
-        <span class="block font-bold text-sm truncate leading-tight">${name}</span>
-        <span class="block text-[10px] uppercase tracking-wider font-extrabold ${statusCls}">${statusLabel}</span>
-      </span>
-      ${icon}
+      ${playerCard(name, { team: fav, size: "sm" })}
+      <span class="ls-card-tag ${statusCls}">${icon}${statusLabel}</span>
     </button>`;
   }).join("");
 
@@ -325,7 +323,7 @@ function buildLiveSubCarousel(){
       ${liveSubPosGroups().map((g, idx) => `<button class="pos-carousel-dot ${idx === groupIndex ? 'active' : ''}" data-ls-dot="${idx}" title="${g.label}" aria-label="${g.label}"></button>`).join("")}
     </div>
     <div class="lineup-scroll-shell">
-      <div class="lineup-scroll-target space-y-2">${cards || `<div class="text-sm text-slate-400 py-2 text-center font-semibold">Nenhum jogador</div>`}</div>
+      <div class="lineup-scroll-target ls-bench-grid">${cards || `<div class="text-sm text-slate-400 py-2 text-center font-semibold">Nenhum jogador</div>`}</div>
     </div>
   </div>`;
 }

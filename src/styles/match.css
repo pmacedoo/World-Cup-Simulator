@@ -905,6 +905,28 @@
 .ls-status-out{color:#b91c1c;}
 .ls-status-in{color:#16a34a;}
 .ls-status-sel{color:#b45309;}
+/* banco como cartinhas douradas (estilo FIFA) */
+.ls-bench-grid{display:flex;flex-wrap:wrap;gap:12px;justify-content:center;align-content:flex-start;}
+.ls-card{display:flex;flex-direction:column;align-items:center;gap:5px;background:none !important;border:0;padding:2px;cursor:pointer;}
+.ls-card[draggable="true"]{touch-action:none;cursor:grab;}
+.ls-card .playercard{transition:transform .12s,box-shadow .12s;}
+.ls-card:hover:not(.pointer-events-none) .playercard{transform:translateY(-2px);}
+.ls-card.is-dragging{opacity:.58;}
+.ls-card.is-dragging .playercard{transform:scale(.96);}
+.ls-card.ls-player-sel .playercard{box-shadow:0 0 0 3px var(--gold-400),0 0 0 6px rgba(245,210,114,.32),inset 0 1px 0 rgba(255,255,255,.6);}
+.ls-card.ls-player-used{opacity:.45;pointer-events:none;}
+.ls-card-tag{display:inline-flex;align-items:center;gap:3px;font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;}
+/* lista da escalação como cartinhas douradas */
+.planner-card-grid{display:flex;flex-wrap:wrap;gap:12px;justify-content:center;align-content:flex-start;}
+.planner-player.planner-card{display:flex;flex-direction:column;align-items:center;gap:5px;background:none !important;border:0 !important;padding:2px !important;width:auto;text-align:center;}
+.planner-player.planner-card[draggable="true"]{touch-action:none;cursor:grab;}
+.planner-player.planner-card .playercard{transition:transform .12s,box-shadow .12s;}
+.planner-player.planner-card:hover:not(.is-selected) .playercard{transform:translateY(-2px);}
+.planner-player.planner-card.is-selected{opacity:.55;}
+.planner-player.planner-card.is-selected .playercard{box-shadow:0 0 0 3px var(--mxgreen,#1f7a4d),0 0 0 6px rgba(31,122,77,.25),inset 0 1px 0 rgba(255,255,255,.5);}
+.planner-player.planner-card.is-dragging{opacity:.58;}
+.planner-player.planner-card.is-dragging .playercard{transform:scale(.96);}
+.planner-card-tag{display:inline-flex;align-items:center;gap:3px;font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;}
 
 /* ---------- disputa de pênaltis (animada) ---------- */
 .pk-wrap{border-radius:1.5rem;padding:14px;background:linear-gradient(170deg,rgba(10,49,97,.06),rgba(255,255,255,.5));border:1px solid rgba(255,255,255,.7);}

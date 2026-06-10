@@ -332,20 +332,31 @@ export const WC_LINEUPS = (() => {
     return {attack, defense};
   }
 
-  // rating ABSOLUTO de uma escalação (forma + qualidade do XI + postura + capitão),
-  // antes de referenciar contra a tática padrão.
+  // overall EFETIVO de um XI realmente escalado (espelha teamOverall, mas sobre
+  // os 11 em campo): 0.72·média(XI) + 0.28·média(top3 do XI). Para o melhor XI
+  // bate com team.ovr; ao poupar um craque, ele sai do XI e do top3 → o efetivo
+  // cai (o brilho do astro só conta se ele jogar). É a alavanca de qualidade do
+  // motor — por isso rawRating NÃO repete penalidade de qualidade (evita contar
+  // duas vezes); lá fica só forma/postura/posição/capitão.
+  function fieldedOverall(teamName, starters){
+    const team=TEAMS[teamName];
+    if(!team) return 74;
+    const byName=Object.fromEntries(team.sq.map(p=>[p[0],p]));
+    const names=(starters && starters.length===11 && starters.every(n=>byName[n]))
+      ? starters : bestElevenNames(teamName, team.shape);
+    const ovrs=names.map(n=>Number(byName[n]?.[2]||0)).filter(x=>x>0).sort((a,b)=>b-a);
+    if(!ovrs.length) return team.ovr || 74;
+    const mean=a=>a.reduce((s,x)=>s+x,0)/a.length;
+    return mean(ovrs)*0.72 + mean(ovrs.slice(0,3))*0.28;
+  }
+
+  // rating tático ABSOLUTO de uma escalação (forma + postura + posição + capitão).
+  // A QUALIDADE do XI não entra aqui — é capturada por fieldedOverall no motor.
   function rawRating(teamName, tactic){
     const team=TEAMS[teamName];
     const shape=tactic.formation || team.shape || "4-3-3";
     const starters=(tactic.starters && tactic.starters.length===11) ? tactic.starters : bestElevenNames(teamName, shape);
-    // 1) déficit de qualidade vs melhor XI possível NA MESMA formação.
-    // Sem teto interno: o clamp final (±3.4) em lineupRating é quem limita.
-    // Como o rating é relativo à autoTactic, na prática o termo de qualidade
-    // vira (qualidadeXI − qualidadeAuto)·0.42 — proporcional ao quanto o
-    // técnico enfraqueceu/reforçou o XI, sem saturar perto do padrão.
-    const optimal=elevenQuality(teamName, bestElevenNames(teamName, shape));
-    const chosen=elevenQuality(teamName, starters);
-    const qualityPenalty=Math.max(0, optimal-chosen)*0.42;
+    // 1) jogador fora da posição natural (improviso custa ataque/defesa)
     const posPenalty=positionPenalty(teamName, tactic, starters);
     // 2) efeito da forma (relativo a 4-3-3: DF4/MF3/FW3)
     const slots=formationSlots(shape);
@@ -359,8 +370,8 @@ export const WC_LINEUPS = (() => {
     const cap=tactic.captain;
     const capBonus=(cap && ((team.sq.find(p=>p[0]===cap)?.[3]||"").includes("S") || (team.xi||[]).includes(cap))) ? 0.3 : 0;
     return {
-      attack: attackShape + attM - qualityPenalty - posPenalty.attack + capBonus,
-      defense: defenseShape + defM - qualityPenalty - posPenalty.defense + capBonus,
+      attack: attackShape + attM - posPenalty.attack + capBonus,
+      defense: defenseShape + defM - posPenalty.defense + capBonus,
     };
   }
 
@@ -462,6 +473,7 @@ export const WC_LINEUPS = (() => {
     bestElevenNames,
     pickCaptain,
     autoTactic,
+    fieldedOverall,
     lineupRating,
     ratingTimeline,
     tacticHash,

@@ -7,6 +7,7 @@ import { RND, clamp, mulberry32, pick, poisson, rint, setRandomSource } from "./
 import { GOAL_TYPES } from "./scoring.js";
 import { WC_LINEUPS } from "./lineups.js";
 import { analyzeTopSeedProtection, topSeedRuleFor } from "../domain/bracket/top-seed-protection.js";
+import { goalWeight } from "../data/player-utils.js";
 
 const CALENDAR = WC_CALENDAR;
 const LINEUPS = WC_LINEUPS;
@@ -25,14 +26,14 @@ function teamObj(name){ const t = TEAMS[name]; return {name, ...t}; }
 // escolhe artilheiro ponderado pelo peso de gol do elenco (exclui suspensos)
 function pickScorer(team, suspended=null, eligibleNames=null){
   const canUse = p => (!eligibleNames || eligibleNames.has(p[0])) && (!suspended || !suspended.has(p[0])) && p[1] !== "GK";
-  const cands = team.sq.filter(p=>p[2]>0 && canUse(p));
+  const cands = team.sq.filter(canUse);
   if(!cands.length){
-    const fallback = team.sq.filter(canUse);
-    return fallback.length ? fallback[Math.floor(RND()*fallback.length)] : team.sq.find(p=>p[1]!=="GK") || team.sq[0];
+    return team.sq.find(p=>p[1]!=="GK") || team.sq[0];
   }
-  const total = cands.reduce((s,p)=>s+p[2],0);
+  // peso de gol = propensão ofensiva (grupo) amplificada pelo overall real
+  const total = cands.reduce((s,p)=>s+goalWeight(p),0);
   let r = RND()*total;
-  for(const p of cands){ r -= p[2]; if(r<=0) return p; }
+  for(const p of cands){ r -= goalWeight(p); if(r<=0) return p; }
   return cands[cands.length-1];
 }
 function pickAssister(team, scorerName, suspended=null, eligibleNames=null){
@@ -40,9 +41,9 @@ function pickAssister(team, scorerName, suspended=null, eligibleNames=null){
     && (!eligibleNames || eligibleNames.has(p[0]))
     && (!suspended || !suspended.has(p[0])));
   if(!cands.length) return null;
-  const total = cands.reduce((s,p)=>s+p[2]+0.5,0);
+  const total = cands.reduce((s,p)=>s+goalWeight(p)+0.5,0);
   let r = RND()*total;
-  for(const p of cands){ r -= (p[2]+0.5); if(r<=0) return p[0]; }
+  for(const p of cands){ r -= (goalWeight(p)+0.5); if(r<=0) return p[0]; }
   return cands[0][0];
 }
 
@@ -147,9 +148,16 @@ function buildShootout(homeName, awayName, winnerHome, seed){
 function playMatch(homeName, awayName, stage, chaos, knockout=false, vIndex=0, calendarEntry=null, suspended=null, moraleA=1, moraleB=1, favoriteContext=null){
   const A = teamObj(homeName), B = teamObj(awayName);
   const base = 1.1;
+  // Força efetiva vem do XI REALMENTE escalado (não mais do ovr fixo): para a
+  // favorita usa o XI do técnico; para os demais, o melhor XI. Poupar um craque
+  // derruba a força de verdade — simétrico para os dois lados.
+  const favStartersA = (favoriteContext?.team === homeName) ? (favoriteContext.tactic?.starters || null) : null;
+  const favStartersB = (favoriteContext?.team === awayName) ? (favoriteContext.tactic?.starters || null) : null;
+  const fieldedA = LINEUPS?.fieldedOverall ? LINEUPS.fieldedOverall(homeName, favStartersA) : A.ovr;
+  const fieldedB = LINEUPS?.fieldedOverall ? LINEUPS.fieldedOverall(awayName, favStartersB) : B.ovr;
   // OVR efetivo: anfitriãs recebem +2 pontos de força quando jogam em casa
-  const effOvrA = A.ovr + (HOST_NATIONS.has(homeName) ? HOST_ADVANTAGE_OVR : 0);
-  const effOvrB = B.ovr + (HOST_NATIONS.has(awayName) ? HOST_ADVANTAGE_OVR : 0);
+  const effOvrA = fieldedA + (HOST_NATIONS.has(homeName) ? HOST_ADVANTAGE_OVR : 0);
+  const effOvrB = fieldedB + (HOST_NATIONS.has(awayName) ? HOST_ADVANTAGE_OVR : 0);
   const diff = effOvrA - effOvrB;
   // gols esperados modulados por força + ruído (chaos) + moral (clamped para evitar extremos)
   const mA = clamp(moraleA, 0.88, 1.12);
