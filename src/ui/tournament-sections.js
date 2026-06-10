@@ -1,5 +1,8 @@
-﻿"use strict";
 
+
+import { TEAMS } from "../data/worldcup-data.js";
+import { currentSim } from "../state/simulation-store.js";
+import { $, el, flag, ic, matchScheduleLine, rowDot, scoreLine, statusBadge } from "./render-helpers.js";
 const POS_LABEL = {GK:"GOL",DF:"DEF",MF:"MEI",FW:"ATA"};
 function teamSquadDetails(team){
   const t = TEAMS[team];
@@ -92,9 +95,9 @@ function matchCard(m){
       <span>${m.matchNo?`M${m.matchNo} · `:''}${m.stage}</span><span class="font-semibold normal-case tracking-normal">${matchScheduleLine(m)}</span>
     </div>
     <div class="flex items-center justify-center gap-3 sm:gap-5">
-      <div class="flex-1 text-right font-display font-extrabold text-base sm:text-lg ${aWin?'':'text-slate-400'}">${m.home} ${flag(m.home)}</div>
+      <div class="flex-1 min-w-0 text-right font-display font-extrabold text-base sm:text-lg truncate ${aWin?'':'text-slate-400'}">${m.home} ${flag(m.home)}</div>
       <div class="px-3 py-1 rounded-xl bg-ink text-white font-extrabold tnum text-lg">${scoreLine(m)}</div>
-      <div class="flex-1 text-left font-display font-extrabold text-base sm:text-lg ${bWin?'':'text-slate-400'}">${flag(m.away)} ${m.away}</div>
+      <div class="flex-1 min-w-0 text-left font-display font-extrabold text-base sm:text-lg truncate ${bWin?'':'text-slate-400'}">${flag(m.away)} ${m.away}</div>
     </div>
     ${goalChips(m)}
   </div>`;
@@ -188,3 +191,5 @@ function renderRankingProtection(){
       </div>
     </div>`;
 }
+
+export { goalChips, renderGroups, renderMatches, renderRankingProtection, renderThirds };

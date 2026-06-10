@@ -1,7 +1,11 @@
-﻿"use strict";
 
 /* =================================================================
-   ESTADO + PERFIS DE SIMULAÇÃO
+   PERFIS DE SIMULAÇÃO
+   -----------------------------------------------------------------
+   Cada perfil define o "tom" da Copa: peso dos favoritos, chance de
+   zebra, drama (pênaltis/prorrogação/gol no fim) e força narrativa.
+   `chaos` é a variância principal consumida pelo motor; os demais
+   parâmetros descrevem o perfil e alimentam a interface.
    ================================================================= */
 const simulationProfiles = {
   realistic: {
@@ -32,9 +36,12 @@ const simulationProfiles = {
     sub:"Cenário caótico: zebras, viradas e narrativas dramáticas dominam o roteiro.",
   },
 };
-const PROFILE_ORDER = ["realistic","epic","dramatic"];
-const PROFILE_TO_SIM_INDEX = {realistic:0, epic:1, dramatic:2};
+
+const PROFILE_ORDER = ["realistic", "epic", "dramatic"];
+
 function profileFor(type){ return simulationProfiles[type] || simulationProfiles.realistic; }
+
+// Anota o objeto de simulação com o perfil que o gerou (usado pela UI).
 function tagSimulation(sim, type){
   const profile = profileFor(type);
   sim.simulationType = type;
@@ -42,8 +49,5 @@ function tagSimulation(sim, type){
   sim.tone = profile.label;
   return sim;
 }
-function buildProfileSimulation(type, seedOverride=null){
-  const profile = profileFor(type);
-  const seed = seedOverride ?? profile.seed;
-  return tagSimulation(simulateWithRankingProtection(seed, profile.chaos, profile.name, profile.label), type);
-}
+
+export { PROFILE_ORDER, profileFor, simulationProfiles, tagSimulation };

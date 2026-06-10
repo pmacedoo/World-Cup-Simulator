@@ -1,4 +1,3 @@
-"use strict";
 
 /* =================================================================
    PRNG determinístico (mulberry32) + utilidades
@@ -12,7 +11,10 @@ function mulberry32(seed){
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
 }
-let RND = Math.random; // substituído por simulação
+let RND = Math.random; // trocado pela simulação via setRandomSource
+// bindings importados são somente-leitura em ESM: a troca da fonte
+// aleatória precisa acontecer aqui dentro, nunca por atribuição externa
+function setRandomSource(fn){ RND = fn; }
 const rand  = () => RND();
 const rint  = (n) => Math.floor(RND()*n);
 const pick  = (arr) => arr[rint(arr.length)];
@@ -22,3 +24,5 @@ function poisson(lambda){ // amostra de Poisson via Knuth
   do { k++; p *= RND(); } while (p > L);
   return k-1;
 }
+
+export { RND, clamp, mulberry32, pick, poisson, rint, setRandomSource };

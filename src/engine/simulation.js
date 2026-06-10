@@ -1,10 +1,15 @@
-﻿"use strict";
 // Motor de simulação do Simulador Copa do Mundo FIFA 2026.
-// Carregado após worldcup-data.js (que define window.WC_DATA).
 
-const { TEAMS, GROUPS, THIRD_PLACE_MAP } = window.WC_DATA;
-const CALENDAR = window.WC_CALENDAR || null;
-const LINEUPS = window.WC_LINEUPS || null;
+import { GROUPS, TEAMS, THIRD_PLACE_MAP } from "../data/worldcup-data.js";
+import { VENUES } from "../data/venues.js";
+import { WC_CALENDAR } from "../data/worldcup-calendar.js";
+import { RND, clamp, mulberry32, pick, poisson, rint, setRandomSource } from "./random.js";
+import { GOAL_TYPES } from "./scoring.js";
+import { WC_LINEUPS } from "./lineups.js";
+import { analyzeTopSeedProtection, topSeedRuleFor } from "../domain/bracket/top-seed-protection.js";
+
+const CALENDAR = WC_CALENDAR;
+const LINEUPS = WC_LINEUPS;
 
 // Seleções anfitriãs da Copa 2026 — recebem bônus de jogar em casa
 const HOST_NATIONS = new Set(["Estados Unidos","México","Canadá"]);
@@ -18,10 +23,11 @@ const HOST_ADVANTAGE_OVR = 2;
 function teamObj(name){ const t = TEAMS[name]; return {name, ...t}; }
 
 // escolhe artilheiro ponderado pelo peso de gol do elenco (exclui suspensos)
-function pickScorer(team, suspended=null){
-  const cands = team.sq.filter(p=>p[2]>0 && (!suspended || !suspended.has(p[0])));
+function pickScorer(team, suspended=null, eligibleNames=null){
+  const canUse = p => (!eligibleNames || eligibleNames.has(p[0])) && (!suspended || !suspended.has(p[0])) && p[1] !== "GK";
+  const cands = team.sq.filter(p=>p[2]>0 && canUse(p));
   if(!cands.length){
-    const fallback = team.sq.filter(p=>p[1]!=="GK" && (!suspended || !suspended.has(p[0])));
+    const fallback = team.sq.filter(canUse);
     return fallback.length ? fallback[Math.floor(RND()*fallback.length)] : team.sq.find(p=>p[1]!=="GK") || team.sq[0];
   }
   const total = cands.reduce((s,p)=>s+p[2],0);
@@ -29,8 +35,10 @@ function pickScorer(team, suspended=null){
   for(const p of cands){ r -= p[2]; if(r<=0) return p; }
   return cands[cands.length-1];
 }
-function pickAssister(team, scorerName, suspended=null){
-  const cands = team.sq.filter(p=>p[1]!=="GK" && p[0]!==scorerName && (!suspended || !suspended.has(p[0])));
+function pickAssister(team, scorerName, suspended=null, eligibleNames=null){
+  const cands = team.sq.filter(p=>p[1]!=="GK" && p[0]!==scorerName
+    && (!eligibleNames || eligibleNames.has(p[0]))
+    && (!suspended || !suspended.has(p[0])));
   if(!cands.length) return null;
   const total = cands.reduce((s,p)=>s+p[2]+0.5,0);
   let r = RND()*total;
@@ -38,15 +46,32 @@ function pickAssister(team, scorerName, suspended=null){
   return cands[0][0];
 }
 
+function activePlayerNamesForGoal(match, teamName, minute){
+  if(!match?.lineups) return null;
+  const side = match.home === teamName ? "home" : match.away === teamName ? "away" : "";
+  const lineup = side && match.lineups[side];
+  if(!lineup?.starters?.length) return null;
+  const field = new Map(lineup.starters.map(p => [p.name, p]));
+  (match.substitutions || [])
+    .filter(sub => sub.team === teamName && (sub.minute | 0) <= (minute | 0))
+    .sort((a, b) => (a.minute | 0) - (b.minute | 0))
+    .forEach(sub => {
+      if(sub.out?.name) field.delete(sub.out.name);
+      if(sub.in?.name) field.set(sub.in.name, sub.in);
+    });
+  return new Set([...field.keys()]);
+}
+
 // gera lista de gols (autor, minuto, time, tipo) para um time
-function makeGoals(team, n, extra=false, suspended=null){
+function makeGoals(team, n, extra=false, suspended=null, match=null){
   const goals = [];
   for(let i=0;i<n;i++){
     const minute = extra ? (91 + rint(30)) : (1 + rint(90));
-    const scorer = pickScorer(team, suspended);
+    const activeNames = activePlayerNamesForGoal(match, team.name, minute);
+    const scorer = pickScorer(team, suspended, activeNames);
     const type = pick(GOAL_TYPES);
     const assist = (type==="de pênalti"||type==="cobrança de falta") ? null
-                  : (RND()<0.62 ? pickAssister(team, scorer[0], suspended) : null);
+                  : (RND()<0.62 ? pickAssister(team, scorer[0], suspended, activeNames) : null);
     goals.push({minute, player:scorer[0], team:team.name, type, assist});
   }
   return goals;
@@ -119,7 +144,7 @@ function buildShootout(homeName, awayName, winnerHome, seed){
 // simula uma partida (chaos controla a variância/zebras)
 // suspended: Set de nomes de jogadores suspensos por acúmulo de amarelos
 // moraleA/moraleB: multiplicador de moral (1.0 = neutro; 0.85–1.15)
-function playMatch(homeName, awayName, stage, chaos, knockout=false, vIndex=0, calendarEntry=null, suspended=null, moraleA=1, moraleB=1){
+function playMatch(homeName, awayName, stage, chaos, knockout=false, vIndex=0, calendarEntry=null, suspended=null, moraleA=1, moraleB=1, favoriteContext=null){
   const A = teamObj(homeName), B = teamObj(awayName);
   const base = 1.1;
   // OVR efetivo: anfitriãs recebem +2 pontos de força quando jogam em casa
@@ -133,6 +158,19 @@ function playMatch(homeName, awayName, stage, chaos, knockout=false, vIndex=0, c
   const noiseB = Math.exp((RND()-0.5)*2*chaos);
   let xgA = clamp(base * Math.exp(diff/15) * noiseA * mA, 0.12, 3.35);
   let xgB = clamp(base * Math.exp(-diff/15) * noiseB * mB, 0.12, 3.35);
+  const favoriteTactic = favoriteContext?.tactic || null;
+  if(favoriteContext?.team && favoriteTactic && LINEUPS?.lineupRating){
+    const rating = LINEUPS.lineupRating(favoriteContext.team, favoriteTactic);
+    const attackFactor = Math.exp(rating.attackDelta / 22);
+    const defenseFactor = Math.exp(rating.defenseDelta / 24);
+    if(homeName === favoriteContext.team){
+      xgA = clamp(xgA * attackFactor, 0.12, 3.65);
+      xgB = clamp(xgB / defenseFactor, 0.12, 3.65);
+    } else if(awayName === favoriteContext.team){
+      xgB = clamp(xgB * attackFactor, 0.12, 3.65);
+      xgA = clamp(xgA / defenseFactor, 0.12, 3.65);
+    }
+  }
   // gols do tempo regulamentar
   let gaReg = Math.min(5, poisson(xgA));
   let gbReg = Math.min(5, poisson(xgB));
@@ -154,29 +192,34 @@ function playMatch(homeName, awayName, stage, chaos, knockout=false, vIndex=0, c
   }
 
   const ga = gaReg + gaExt, gb = gbReg + gbExt;
-  // minutos coerentes: gols normais em 1–90, gols de prorrogação em 91–120
-  const finalGoals = [
-    ...makeGoals(A, gaReg, false, suspended), ...makeGoals(A, gaExt, true, suspended),
-    ...makeGoals(B, gbReg, false, suspended), ...makeGoals(B, gbExt, true, suspended),
-  ].sort((x,y)=> x.minute - y.minute);
-
   const v = VENUES[vIndex % VENUES.length];
   const match = {
     stage, home:homeName, away:awayName, ga, gb, aet, pens, penalties,
     score:`${ga}-${gb}`,
     venue:v[0], city:v[1],
-    goals: finalGoals,
+    goals: [],
     ovrA:A.ovr, ovrB:B.ovr,
   };
+  if(favoriteContext?.team && (homeName === favoriteContext.team || awayName === favoriteContext.team)){
+    match.favoriteSide = homeName === favoriteContext.team ? "home" : "away";
+    match.favoriteJourneyIndex = favoriteContext.index;
+    match.favoriteTactic = favoriteContext.tactic || LINEUPS?.autoTactic?.(favoriteContext.team) || null;
+  }
   if(CALENDAR) CALENDAR.apply(match, calendarEntry);
   if(LINEUPS) LINEUPS.attachMatchPersonnel(match);
+  // minutos coerentes: gols normais em 1–90, gols de prorrogação em 91–120.
+  // A autoria considera quem estava em campo naquele minuto.
+  match.goals = [
+    ...makeGoals(A, gaReg, false, suspended, match), ...makeGoals(A, gaExt, true, suspended, match),
+    ...makeGoals(B, gbReg, false, suspended, match), ...makeGoals(B, gbExt, true, suspended, match),
+  ].sort((x,y)=> x.minute - y.minute);
   return match;
 }
 
 // round-robin de 4 times
 const RR = [ [[0,1],[2,3]], [[0,2],[3,1]], [[0,3],[1,2]] ];
 
-function simulateGroup(letter, teams, chaos, vStart){
+function simulateGroup(letter, teams, chaos, vStart, favoriteContextFor=()=>null){
   const matches=[];
   let vi=vStart;
 
@@ -203,7 +246,7 @@ function simulateGroup(letter, teams, chaos, vStart){
     const suspended=getSuspended();
     fixtures.forEach(fixture=>{
       const mA=morale[fixture.home]||1, mB=morale[fixture.away]||1;
-      const m=playMatch(fixture.home, fixture.away, fixture.stage||`Grupo ${letter} · Rodada ${fixture.round}`, chaos, false, vi++, fixture, suspended, mA, mB);
+      const m=playMatch(fixture.home, fixture.away, fixture.stage||`Grupo ${letter} · Rodada ${fixture.round}`, chaos, false, vi++, fixture, suspended, mA, mB, favoriteContextFor(fixture.home, fixture.away));
       m.round=fixture.round; m.group=letter;
 
       // Gera cartões amarelos desta partida e registra no match
@@ -272,15 +315,23 @@ function slotFromRow(r, tier){
   return {team:r.team, group:r.group||r.letter, P:r.P, SG:r.SG, GP:r.GP, FP:r.FP, ovr:r.ovr, tier};
 }
 
-function simulate(seed, chaos, name, tone){
-  RND = mulberry32(seed);
+function simulate(seed, chaos, name, tone, options={}){
+  setRandomSource(mulberry32(seed));
+  const favoriteTeam = options.favoriteTeam || "";
+  const favoriteTactics = options.tactics || {};
+  let favoriteMatchIndex = 0;
+  const favoriteContextFor = (home, away) => {
+    if(!favoriteTeam || (home !== favoriteTeam && away !== favoriteTeam)) return null;
+    const index = favoriteMatchIndex++;
+    return {team:favoriteTeam, index, tactic:favoriteTactics[index] || null};
+  };
 
   // ---- fase de grupos ----
   const groups = [];
   let vStart=0;
   const teamMorale = {}; // moral acumulada de cada time vinda dos grupos (usada no mata-mata)
   GROUPS.forEach(([L,ts])=>{
-    const g=simulateGroup(L,ts,chaos,vStart);
+    const g=simulateGroup(L,ts,chaos,vStart,favoriteContextFor);
     vStart+=6;
     g.table.forEach(r=>r.group=L);
     // Herda moral final do grupo para o mata-mata
@@ -306,11 +357,6 @@ function simulate(seed, chaos, name, tone){
   });
 
   const groupByLetter = Object.fromEntries(groups.map(g=>[g.letter,g]));
-  const protectedTopSeedTeams = new Set(
-    FIFA_RANKING_TOP4
-      .filter(seed=>groupByLetter[seed.group]?.table[0]?.team===seed.team)
-      .map(seed=>seed.team)
-  );
   const thirdCombo = qualThirds.map(t=>t.group).sort().join("");
   const thirdSlotMap = THIRD_PLACE_MAP[thirdCombo];
   if(!thirdSlotMap) throw new Error(`Combinação de terceiros sem chave oficial: ${thirdCombo}`);
@@ -335,9 +381,9 @@ function simulate(seed, chaos, name, tone){
   function playKnockMatch(id, A, B, label, stageIdx){
     const mA=clamp(teamMorale[A.team]||1, 0.88, 1.12);
     const mB=clamp(teamMorale[B.team]||1, 0.88, 1.12);
-    const m = playMatch(A.team, B.team, label, chaos, true, vi++, CALENDAR?.knockoutFixture?.(id), null, mA, mB);
+    const m = playMatch(A.team, B.team, label, chaos, true, vi++, CALENDAR?.knockoutFixture?.(id), null, mA, mB, favoriteContextFor(A.team, B.team));
     m.matchNo = id; m.A=A; m.B=B; m.stageIdx=stageIdx;
-    m.topSeedRule = topSeedRuleFor(A.team, B.team, stageIdx, protectedTopSeedTeams);
+    m.topSeedRule = topSeedRuleFor(A.team, B.team, stageIdx);
     const aWin = (m.ga>m.gb) || (m.pens && m.pens[0]>m.pens[1]);
     m.winner = aWin? A: B; m.loser = aWin? B: A;
     setReach(A.team, stageIdx); setReach(B.team, stageIdx);
@@ -377,15 +423,15 @@ function simulate(seed, chaos, name, tone){
   const SF  = playFromMatches([[101,97,98],[102,99,100]], "Semifinal", 4);
   // 3º lugar
   const tpA = SF.matches[0].loser, tpB = SF.matches[1].loser;
-  const third = playMatch(tpA.team, tpB.team, "Disputa de 3º lugar", chaos, true, vi++, CALENDAR?.knockoutFixture?.(103));
+  const third = playMatch(tpA.team, tpB.team, "Disputa de 3º lugar", chaos, true, vi++, CALENDAR?.knockoutFixture?.(103), null, 1, 1, favoriteContextFor(tpA.team, tpB.team));
   third.matchNo=103; third.A=tpA; third.B=tpB; third.stageIdx=4;
   const thirdWin = (third.ga>third.gb)||(third.pens&&third.pens[0]>third.pens[1]);
   third.winner = thirdWin? tpA: tpB; third.loser = thirdWin? tpB: tpA;
   // final
   const fA = SF.matches[0].winner, fB = SF.matches[1].winner;
-  const final = playMatch(fA.team, fB.team, "Final", chaos, true, 4, CALENDAR?.knockoutFixture?.(104)); // MetLife
+  const final = playMatch(fA.team, fB.team, "Final", chaos, true, 4, CALENDAR?.knockoutFixture?.(104), null, 1, 1, favoriteContextFor(fA.team, fB.team)); // MetLife
   final.matchNo=104; final.A=fA; final.B=fB; final.stageIdx=5;
-  final.topSeedRule = topSeedRuleFor(fA.team, fB.team, 5, protectedTopSeedTeams);
+  final.topSeedRule = topSeedRuleFor(fA.team, fB.team, 5);
   final.venue="MetLife Stadium"; final.city="Nova York / Nova Jersey";
   const champWin = (final.ga>final.gb)||(final.pens&&final.pens[0]>final.pens[1]);
   final.winner = champWin? fA: fB; final.loser = champWin? fB: fA;
@@ -545,13 +591,13 @@ function simulate(seed, chaos, name, tone){
   };
 }
 
-function simulateWithRankingProtection(seed, chaos, name, tone){
+function simulateWithRankingProtection(seed, chaos, name, tone, options={}){
   let attempt = 0;
   let resolvedSeed = seed >>> 0;
   let sim = null;
   const maxAttempts = 90;
   while(attempt < maxAttempts){
-    sim = simulate(resolvedSeed, chaos, name, tone);
+    sim = simulate(resolvedSeed, chaos, name, tone, options);
     if(!sim.topSeedProtection.violations.length) break;
     attempt++;
     // Salto determinístico: a mesma seed inicial sempre cai no mesmo cenário válido.
@@ -566,3 +612,5 @@ function simulateWithRankingProtection(seed, chaos, name, tone){
 
 
 
+
+export { simulateWithRankingProtection };

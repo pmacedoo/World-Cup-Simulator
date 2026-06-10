@@ -1,116 +1,216 @@
-﻿"use strict";
-
-function safeStorageGet(key){ try{return localStorage.getItem(key);}catch{return null;} }
-function safeStorageSet(key,value){ try{localStorage.setItem(key,value);}catch{} }
-function safeStorageRemove(key){ try{localStorage.removeItem(key);}catch{} }
 
 /* =================================================================
-   SIMULAÇÕES SALVAS PELO USUÁRIO
+   STORE DE SIMULAÇÕES + ESTADO GLOBAL DA APLICAÇÃO
    -----------------------------------------------------------------
-   Não há mais 3 simulações "padrão". O usuário cria simulações
-   (seleção + tipo), cada uma é salva no localStorage e pode ser
-   aberta, deletada ou usada para gerar uma nova. O objeto completo
-   é regenerado de forma determinística a partir do seed salvo.
-   ================================================================= */
-const SIM_STORE_KEY  = "wc_simulations_v1";
-const SIM_ACTIVE_KEY = "wc_active_simulation_v1";
-const simCache = new Map();                       // id -> objeto de simulação completo
+   O usuário cria simulações (seleção favorita + tipo). Cada registro
+   é persistido via camada de storage e o objeto completo do torneio
+   é regenerado de forma determinística a partir do seed salvo —
+   nunca é serializado.
 
-const state = { sims:[], meta:[], custom:null, active:0 };  // espelho usado pelo dashboard
+   Registro persistido (appState.sims[i]):
+     id, favoriteTeam, type, seed, createdAt,
+     revealed            -> nº de jogos da favorita já revelados
+     tactics             -> { journeyIndex: tática } escolhidas no modo técnico
+     defaultTactic       -> última tática pré-jogo confirmada, usada como padrão
+     watchIndex          -> progresso do modo espectador (pós-eliminação)
+     calendarDayIndex    -> dia atual do calendário da jornada
+     journeyMinute       -> minuto do relógio da jornada (0–1439)
+     watchedMatchNos     -> jogos do calendário já assistidos
+     finished, dashboardUnlocked, dayPhase ("morning"|"night")
+   ================================================================= */
+
+import { TEAMS } from "../data/worldcup-data.js";
+import { simulateWithRankingProtection } from "../engine/simulation.js";
+import { getTeamMatches } from "../domain/matches/match-queries.js";
+import { STORAGE_KEYS, storageGet, storageGetJSON, storageSet, storageSetJSON } from "./storage.js";
+import { profileFor, simulationProfiles, tagSimulation } from "./simulation-profiles.js";
+
+// Cache id -> objeto de simulação completo (recriado sob demanda).
+const simCache = new Map();
+
 const appState = {
-  sims: [],            // registros: {id,favoriteTeam,type,seed,createdAt,revealed,finished,dashboardUnlocked}
-  activeId: null,
-  draftTeam: null,     // assistente de criação
-  teamSearch: "",
-  view: "picker-team", // picker-team | picker-type | journey | dashboard
-  currentSimulatedMatch: null,
-  matchTimer: null,
-  penaltyTimers: [],
-  matchAnimationStarted: false,
-  darkMode: false,     // preferência de modo escuro (persistida em localStorage)
+  sims: [],                    // registros persistidos (ver acima)
+  activeId: null,              // id da simulação ativa
+  draftTeam: null,             // seleção escolhida no assistente de criação
+  teamSearch: "",              // filtro do seletor de seleções
+  view: "picker-team",         // picker-team | picker-type | journey | dashboard
+  mobileJourneyTab: "game",    // aba ativa da jornada no layout mobile
+  darkMode: false,             // preferência de modo escuro (persistida)
+  // -- partida em exibição no simulador --
+  currentSimulatedMatch: null, // {match, journeyIndex, minute, finished}
+  matchTimer: null,            // setInterval da transmissão acelerada
+  penaltyTimers: [],           // timeouts da disputa de pênaltis
+  liveSubPaused: false,        // painel de substituição ao vivo aberto
+  // -- avanço automático do relógio da jornada --
   autoAdvancing: false,
   autoAdvanceTimer: null,
 };
-const uid = () => "s" + Date.now().toString(36) + Math.random().toString(36).slice(2,7);
-function timeAgo(ts){
-  const d=Math.max(0,Date.now()-ts), m=Math.floor(d/60000), h=Math.floor(m/60), dd=Math.floor(h/24);
-  if(dd>0) return `há ${dd}d`; if(h>0) return `há ${h}h`; if(m>0) return `há ${m}min`; return "agora";
+
+const createSimulationId = () =>
+  "s" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+
+function timeAgo(timestamp){
+  const elapsed = Math.max(0, Date.now() - timestamp);
+  const minutes = Math.floor(elapsed / 60000), hours = Math.floor(minutes / 60), days = Math.floor(hours / 24);
+  if(days > 0) return `há ${days}d`;
+  if(hours > 0) return `há ${hours}h`;
+  if(minutes > 0) return `há ${minutes}min`;
+  return "agora";
 }
+
+/* ---------- persistência ---------- */
 function persistSims(){
-  safeStorageSet(SIM_STORE_KEY, JSON.stringify(appState.sims));
-  safeStorageSet(SIM_ACTIVE_KEY, appState.activeId || "");
+  storageSetJSON(STORAGE_KEYS.simulations, appState.sims);
+  storageSet(STORAGE_KEYS.activeSimulation, appState.activeId || "");
 }
+
+// Carrega e SANEIA os registros salvos: descarta simulações de seleções
+// ou perfis que não existem mais e normaliza campos numéricos/novos,
+// mantendo compatibilidade com saves de versões anteriores.
 function loadSims(){
-  let arr=[]; try{ arr=JSON.parse(safeStorageGet(SIM_STORE_KEY)||"[]"); }catch{ arr=[]; }
-  appState.sims = (Array.isArray(arr)?arr:[])
-    .filter(r=>r && TEAMS[r.favoriteTeam] && simulationProfiles[r.type])
-    .map(r=>{
-      const revealed=Math.max(0,r.revealed|0);
-      const dayPhase = r.dayPhase==="night" || (!r.dayPhase && revealed>0) ? "night" : "morning";
-      const tactics = (r.tactics && typeof r.tactics==="object") ? r.tactics : {};
-      const watchIndex=Math.max(0,r.watchIndex|0);
-      const calendarDayIndex=Math.max(0,r.calendarDayIndex|0);
-      const journeyMinute=Number.isFinite(r.journeyMinute) ? Math.max(0, Math.min(1439, r.journeyMinute|0)) : 300;
-      const watchedMatchNos=Array.isArray(r.watchedMatchNos) ? r.watchedMatchNos.map(Number).filter(Boolean) : [];
-      return { id:r.id||uid(), favoriteTeam:r.favoriteTeam, type:r.type, seed:(r.seed>>>0)||1,
-        createdAt:r.createdAt||Date.now(), revealed, tactics,
-        watchIndex, calendarDayIndex, journeyMinute, watchedMatchNos, finished:!!r.finished, dashboardUnlocked:!!r.dashboardUnlocked, dayPhase };
-    });
-  const act=safeStorageGet(SIM_ACTIVE_KEY);
-  appState.activeId = appState.sims.some(r=>r.id===act) ? act : (appState.sims[0]?.id || null);
+  const raw = storageGetJSON(STORAGE_KEYS.simulations, []);
+  appState.sims = (Array.isArray(raw) ? raw : [])
+    .filter(record => record && TEAMS[record.favoriteTeam] && simulationProfiles[record.type])
+    .map(normalizeSimulationRecord);
+  const savedActiveId = storageGet(STORAGE_KEYS.activeSimulation);
+  appState.activeId = appState.sims.some(r => r.id === savedActiveId)
+    ? savedActiveId
+    : (appState.sims[0]?.id || null);
 }
+
+function normalizeSimulationRecord(record){
+  const revealed = Math.max(0, record.revealed | 0);
+  return {
+    id: record.id || createSimulationId(),
+    favoriteTeam: record.favoriteTeam,
+    type: record.type,
+    seed: (record.seed >>> 0) || 1,
+    createdAt: record.createdAt || Date.now(),
+    revealed,
+    tactics: (record.tactics && typeof record.tactics === "object") ? record.tactics : {},
+    defaultTactic: cloneTactic(record.defaultTactic, false),
+    watchIndex: Math.max(0, record.watchIndex | 0),
+    calendarDayIndex: Math.max(0, record.calendarDayIndex | 0),
+    journeyMinute: Number.isFinite(record.journeyMinute)
+      ? Math.max(0, Math.min(1439, record.journeyMinute | 0))
+      : 300,
+    watchedMatchNos: Array.isArray(record.watchedMatchNos)
+      ? record.watchedMatchNos.map(Number).filter(Boolean)
+      : [],
+    finished: !!record.finished,
+    dashboardUnlocked: !!record.dashboardUnlocked,
+    // saves antigos não tinham dayPhase: jornada já iniciada assume "night"
+    dayPhase: record.dayPhase === "night" || (!record.dayPhase && revealed > 0) ? "night" : "morning",
+  };
+}
+
+/* ---------- acesso à simulação ativa ---------- */
 function profileNameFor(record){ return `${record.favoriteTeam} · ${profileFor(record.type).label}`; }
+
+// Regenera (ou devolve do cache) o objeto completo do torneio de um registro.
+// As táticas do modo técnico entram na simulação da campanha da favorita:
+// XI/cobradores definem quem está em campo e os deltas mexem no xG.
 function simObjFor(record){
   if(!record) return null;
   if(simCache.has(record.id)) return simCache.get(record.id);
-  const p=profileFor(record.type);
-  // MODO TÉCNICO: as táticas escolhidas pelo usuário (por jogo da favorita)
-  // entram como simOptions. managerSeed = seed pedido (fixo) garante que os
-  // jogos já jogados não mudem ao definir a tática de um jogo futuro.
-  const simOptions={ favoriteTeam:record.favoriteTeam, tactics:record.tactics||{}, managerSeed:record.seed };
-  const obj=tagSimulation(simulateWithRankingProtection(record.seed, p.chaos, profileNameFor(record), p.label, simOptions), record.type);
-  obj.__recordId=record.id;
-  simCache.set(record.id, obj);
-  return obj;
+  const profile = profileFor(record.type);
+  const sim = tagSimulation(
+    simulateWithRankingProtection(record.seed, profile.chaos, profileNameFor(record), profile.label, {
+      favoriteTeam: record.favoriteTeam,
+      tactics: record.tactics || {},
+    }),
+    record.type
+  );
+  sim.__recordId = record.id;
+  simCache.set(record.id, sim);
+  return sim;
 }
-function activeRecord(){ return appState.sims.find(r=>r.id===appState.activeId) || null; }
+
+function activeRecord(){ return appState.sims.find(r => r.id === appState.activeId) || null; }
 function currentSim(){ return simObjFor(activeRecord()); }
-function createSimulation(team, type){
-  const rec={ id:uid(), favoriteTeam:team, type, seed:((Date.now()^(Math.random()*1e9))>>>0)||1,
-    createdAt:Date.now(), revealed:0, watchIndex:0, calendarDayIndex:0, journeyMinute:300, watchedMatchNos:[], tactics:{}, finished:false, dashboardUnlocked:false, dayPhase:"morning" };
-  appState.sims.push(rec); appState.activeId=rec.id; persistSims();
-  return rec;
+
+/* ---------- mutações ---------- */
+function createSimulation(favoriteTeam, type){
+  const record = {
+    id: createSimulationId(),
+    favoriteTeam,
+    type,
+    seed: ((Date.now() ^ (Math.random() * 1e9)) >>> 0) || 1,
+    createdAt: Date.now(),
+    revealed: 0,
+    tactics: {},
+    defaultTactic: null,
+    watchIndex: 0,
+    calendarDayIndex: 0,
+    journeyMinute: 300,
+    watchedMatchNos: [],
+    finished: false,
+    dashboardUnlocked: false,
+    dayPhase: "morning",
+  };
+  appState.sims.push(record);
+  appState.activeId = record.id;
+  persistSims();
+  return record;
 }
-// Define/atualiza a tática do jogo `journeyIndex` da favorita e invalida o cache
-// da simulação para que o motor recompute com a nova escolha. Só permitido para
-// um jogo ainda NÃO revelado (não reescreve o passado).
+
+function deleteSimulation(id){
+  appState.sims = appState.sims.filter(r => r.id !== id);
+  simCache.delete(id);
+  if(appState.activeId === id) appState.activeId = appState.sims[0]?.id || null;
+  persistSims();
+}
+
+function setActiveSimulation(id){
+  appState.activeId = id;
+  persistSims();
+}
+
+function cloneTactic(tactic, keepLiveScript = true){
+  if(!tactic || typeof tactic !== "object") return null;
+  return {
+    formation: tactic.formation || "4-3-3",
+    starters: Array.isArray(tactic.starters) ? tactic.starters.slice(0, 11) : [],
+    captain: tactic.captain || "",
+    penaltyTaker: tactic.penaltyTaker || "",
+    freeKickTaker: tactic.freeKickTaker || "",
+    mentality: tactic.mentality || "balanced",
+    positions: Object.fromEntries(Object.entries(tactic.positions || {}).map(([name, pos]) => [name, {...pos}])),
+    liveScript: keepLiveScript && Array.isArray(tactic.liveScript)
+      ? tactic.liveScript.map(ev => ({...ev}))
+      : [],
+  };
+}
+
+function setDefaultTactic(record, tactic){
+  if(!record) return;
+  record.defaultTactic = cloneTactic(tactic, false);
+  persistSims();
+}
+
+// Define a tática do jogo `journeyIndex` da favorita e invalida o cache
+// para que o torneio seja regenerado com ela. Só é permitido para um jogo
+// ainda NÃO revelado (não reescreve o passado).
 function setMatchTactic(record, journeyIndex, tactic){
-  if(!record || journeyIndex<record.revealed) return;
+  if(!record || journeyIndex < record.revealed) return;
   record.tactics = record.tactics || {};
-  record.tactics[journeyIndex] = tactic;
+  record.tactics[journeyIndex] = cloneTactic(tactic, true);
   simCache.delete(record.id);
   persistSims();
 }
-function deleteSimulation(id){
-  appState.sims = appState.sims.filter(r=>r.id!==id);
-  simCache.delete(id);
-  if(appState.activeId===id) appState.activeId = appState.sims[0]?.id || null;
-  persistSims();
-}
-function setActiveSimulation(id){ appState.activeId=id; persistSims(); }
+
+// Marca o jogo `journeyIndex` da favorita como revelado (idempotente:
+// o progresso nunca anda para trás).
 function markMatchRevealed(record, journeyIndex){
   if(!record) return;
-  const sim=simObjFor(record);
-  const total=getTeamMatches(sim, record.favoriteTeam).length;
-  record.revealed = Math.min(total, Math.max(record.revealed, journeyIndex+1));
-  if(record.revealed>=total){
-    record.finished=false;
-    record.watchIndex=record.watchIndex||0;
+  const sim = simObjFor(record);
+  const total = getTeamMatches(sim, record.favoriteTeam).length;
+  record.revealed = Math.min(total, Math.max(record.revealed, journeyIndex + 1));
+  if(record.revealed >= total){
+    record.finished = false;          // "finished" = calendário todo assistido, não só a campanha
+    record.watchIndex = record.watchIndex || 0;
   }
   persistSims();
 }
-function syncDashboardState(){
-  state.sims = appState.sims.map(simObjFor);
-  state.meta = appState.sims.map(r=>{ const p=profileFor(r.type); return {sub:p.sub,color:p.color,type:r.type}; });
-  state.active = Math.max(0, appState.sims.findIndex(r=>r.id===appState.activeId));
-}
+
+export { activeRecord, appState, createSimulation, currentSim, deleteSimulation, loadSims, markMatchRevealed, persistSims, setActiveSimulation, setDefaultTactic, setMatchTactic, simObjFor, timeAgo };
