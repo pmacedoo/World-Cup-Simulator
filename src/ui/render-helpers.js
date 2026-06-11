@@ -185,7 +185,7 @@ function playerCard(input, options = {}){
     }
   }
   const captain = data.captain || options.captain || false;
-  const sizeCls = options.size === "sm" ? "playercard-sm" : options.size === "lg" ? "playercard-lg" : "";
+  const sizeCls = options.size === "xs" ? "playercard-xs" : options.size === "sm" ? "playercard-sm" : options.size === "lg" ? "playercard-lg" : "";
   return `<div class="playercard ${sizeCls}" data-name="${name}">
     <div class="playercard-top">
       <span class="playercard-ovr">${overall != null ? overall : "—"}</span>
@@ -197,4 +197,43 @@ function playerCard(input, options = {}){
   </div>`;
 }
 
-export { $, UI, cx, el, flag, getAllTeamsFromSimulation, getFavoriteTeam, ic, matchScheduleLine, paintIcons, pill, playerCard, playerDisplayName, renderSimulationTypeBadge, renderSimulationTypeControls, rowDot, scoreLine, statusBadge, uiConfirm, zebraTeam };
+/* ---------- campo de futebol (SVG, em pé, redimensionável) ---------- */
+// Campo pronto desenhado em SVG (viewBox 100×150 = 2:3, retrato). Escala junto
+// com o container — tudo dentro (linhas, círculos, áreas) acompanha o tamanho.
+// Goleiro embaixo, ataque em cima. Cores via CSS vars (--pitch-*) p/ tema.
+// Retorna o <svg> já com a classe de posicionamento do campo (inset:0, fill).
+function fieldPitch(opts = {}){
+  const line = "rgba(255,255,255,0.72)";
+  const bands = opts.stripes === false ? "" :
+    Array.from({length:8}, (_,i)=> i%2 ? `<rect x="2" y="${(2+i*18.25).toFixed(2)}" width="96" height="18.25" fill="rgba(255,255,255,0.05)"/>` : "").join("");
+  return `<svg class="lineup-field-img pitch-svg" viewBox="0 0 100 150" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <rect x="0" y="0" width="100" height="150" fill="var(--pitch-grass,#1f7a47)"/>
+    ${bands}
+    <g fill="none" stroke="${line}" stroke-width="0.5" stroke-linejoin="round">
+      <rect x="2" y="2" width="96" height="146" rx="0.8"/>
+      <line x1="2" y1="75" x2="98" y2="75"/>
+      <circle cx="50" cy="75" r="9.2"/>
+      <rect x="21" y="2" width="58" height="16.5"/>
+      <rect x="37.5" y="2" width="25" height="6.2"/>
+      <path d="M 43.6 18.5 A 9.15 9.15 0 0 0 56.4 18.5"/>
+      <rect x="21" y="131.5" width="58" height="16.5"/>
+      <rect x="37.5" y="141.8" width="25" height="6.2"/>
+      <path d="M 43.6 131.5 A 9.15 9.15 0 0 1 56.4 131.5"/>
+      <path d="M 4 2 A 2 2 0 0 0 2 4"/>
+      <path d="M 96 2 A 2 2 0 0 1 98 4"/>
+      <path d="M 2 146 A 2 2 0 0 0 4 148"/>
+      <path d="M 98 146 A 2 2 0 0 1 96 148"/>
+    </g>
+    <g fill="${line}">
+      <circle cx="50" cy="75" r="0.7"/>
+      <circle cx="50" cy="12" r="0.7"/>
+      <circle cx="50" cy="138" r="0.7"/>
+    </g>
+    <g fill="rgba(255,255,255,0.16)" stroke="${line}" stroke-width="0.4">
+      <rect x="43" y="0.2" width="14" height="1.9"/>
+      <rect x="43" y="147.9" width="14" height="1.9"/>
+    </g>
+  </svg>`;
+}
+
+export { $, UI, cx, el, fieldPitch, flag, getAllTeamsFromSimulation, getFavoriteTeam, ic, matchScheduleLine, paintIcons, pill, playerCard, playerDisplayName, renderSimulationTypeBadge, renderSimulationTypeControls, rowDot, scoreLine, statusBadge, uiConfirm, zebraTeam };

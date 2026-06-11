@@ -16,8 +16,8 @@ import { TEAMS } from "../../data/worldcup-data.js";
 import { WC_LINEUPS } from "../../engine/lineups.js";
 import { getTeamMatches } from "../../domain/matches/match-queries.js";
 import { activeRecord, appState, currentSim, setMatchTactic } from "../../state/simulation-store.js";
-import { $, UI, cx, getFavoriteTeam, ic, paintIcons, playerCard } from "../render-helpers.js";
-import { FIELD_IMAGE_URL, POS_GROUPS } from "./lineup-editor.js";
+import { $, UI, cx, fieldPitch, getFavoriteTeam, ic, paintIcons, playerCard } from "../render-helpers.js";
+import { POS_GROUPS } from "./lineup-editor.js";
 import { simulateMatch } from "./match-simulator.js";
 const LIVE_SUB_PER_WINDOW = 3;      // até 3 trocas na MESMA parada
 const LIVE_SUB_INPLAY_WINDOWS = 3;  // máx. de paradas com bola rolando
@@ -207,10 +207,11 @@ function liveSubFieldSlots(tactic, baseField, posOf){
   const formation = tactic.formation || "4-3-3";
   const nums = String(formation).match(/\d+/g)?.map(Number) || [4, 3, 3];
   const distY = count => ({1:[50],2:[35,65],3:[25,50,75],4:[18,39,61,82],5:[14,32,50,68,86]})[count] || [18,39,61,82];
+  // campo EM PÉ: goleiro embaixo (y alto), ataque em cima (y baixo). x = espalhamento.
   const lines = nums.length >= 4
-    ? [{pos:"GK",x:11,count:1},{pos:"DF",x:29,count:nums[0]},{pos:"MF",x:43,count:nums[1]},{pos:"MF",x:57,count:nums[2]},{pos:"FW",x:71,count:nums[3]}]
-    : [{pos:"GK",x:11,count:1},{pos:"DF",x:30,count:nums[0]||4},{pos:"MF",x:50,count:nums[1]||3},{pos:"FW",x:69,count:nums[2]||3}];
-  const slots = lines.flatMap(line => distY(line.count).map(y => ({pos:line.pos, x:line.x, y, name:""})));
+    ? [{pos:"GK",y:87,count:1},{pos:"DF",y:72,count:nums[0]},{pos:"MF",y:56,count:nums[1]},{pos:"MF",y:41,count:nums[2]},{pos:"FW",y:26,count:nums[3]}]
+    : [{pos:"GK",y:87,count:1},{pos:"DF",y:71,count:nums[0]||4},{pos:"MF",y:51,count:nums[1]||3},{pos:"FW",y:28,count:nums[2]||3}];
+  const slots = lines.flatMap(line => distY(line.count).map(x => ({pos:line.pos, x, y:line.y, name:""})));
 
   // 1) posição salva na tática; 2) posição natural; 3) qualquer slot vago
   const savedPositions = tactic.positions || {};
@@ -251,19 +252,16 @@ function buildLiveSubField(){
     const isOut = outSet.has(slot.name);
     const isSelected = liveSubFieldSelection === slot.name;
     const canInteract = slot.pos !== "GK";
-    const toneClass = isOut ? "sub-out-player" : isSelected ? "ls-field-sel-bubble" : "pos-tone-" + slot.pos.toLowerCase();
     const dataAttrs = canInteract ? `data-field-name="${slot.name}" data-field-pos="${slot.pos}"` : "";
     const cls = `lineup-drop-slot filled${canInteract ? " sub-drop-target" : ""}`;
+    const cardCls = `field-card${isOut ? " is-out" : ""}${isSelected ? " is-field-selected" : ""}${canInteract ? "" : " is-locked"}`;
     return `<div class="${cls}" ${dataAttrs} style="left:${slot.x}%;top:${slot.y}%;${canInteract ? "cursor:pointer" : ""}">
-      <div class="lineup-field-player ${toneClass}">
-        <span class="lineup-pos">${slot.pos}</span>
-        <span class="lineup-name">${liveSubCircleName(slot.name)}</span>
-      </div>
+      <div class="${cardCls}">${playerCard(slot.name, { team: fav, size: "xs" })}</div>
     </div>`;
   }).join("");
 
-  return `<div class="lineup-field-wrap">
-    <img class="lineup-field-img" src="${FIELD_IMAGE_URL}" alt="">
+  return `<div class="lineup-field-wrap planner-field-portrait ls-field-portrait">
+    ${fieldPitch()}
     <div class="lineup-field-overlay">${slotDivs}</div>
     <div class="ls-formation-badge">${formation}</div>
   </div>`;

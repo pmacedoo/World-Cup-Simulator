@@ -12,7 +12,7 @@ import { TEAMS } from "../../data/worldcup-data.js";
 import { WC_LINEUPS } from "../../engine/lineups.js";
 import { getTeamMatches } from "../../domain/matches/match-queries.js";
 import { activeRecord, currentSim, setDefaultTactic, setMatchTactic } from "../../state/simulation-store.js";
-import { $, UI, cx, el, flag, getFavoriteTeam, ic, paintIcons, playerCard } from "../render-helpers.js";
+import { $, UI, cx, el, fieldPitch, flag, getFavoriteTeam, ic, paintIcons, playerCard, playerDisplayName } from "../render-helpers.js";
 import { renderFavoriteTeamJourney } from "../journey/journey-screens.js";
 import { openMatchSimulator } from "./match-simulator.js";
 
@@ -27,11 +27,6 @@ const POS_GROUPS = [
   { pos:"MF", label:"Meio-campo" },
   { pos:"FW", label:"Ataque" },
 ];
-
-// Resolvida relativa a ESTE módulo: funciona no vite dev, no build
-// (o vite detecta o padrão e empacota com hash) e em servidor estático
-// comum servindo a raiz do projeto — sem depender do public/ na raiz.
-const FIELD_IMAGE_URL = new URL("../../assets/images/soccerfieldremaster.png", import.meta.url);
 
 let plannerState = null;
 let _plannerSuppressClickUntil = 0;
@@ -66,6 +61,8 @@ function openTacticPlanner(match, journeyIndex=0){
     listPositionIndex: 0,
     plannerTab: "lineup",
     fieldSelection: "",
+    benchOpen: false,
+    pendingPlace: "",
     error: "",
   };
   orderStarters();
@@ -139,30 +136,31 @@ function distributeY(count){
   return presets[count] || presets[4];
 }
 function formationFieldSlots(){
+  // Campo EM PÉ (retrato): goleiro embaixo (y alto), ataque em cima (y baixo).
+  // A "linha" da formação vira a profundidade (y); o espalhamento vira o x.
+  // Posições sempre padrão (sem deslocamento por postura).
   const shape = plannerState.formation || "4-3-3";
   const nums = String(shape).match(/\d+/g)?.map(Number) || [4,3,3];
-  const mentalityShift = plannerState.mentality==="attack" ? 6 : plannerState.mentality==="defend" ? -6 : 0;
-  const lineX = (base, pos) => pos==="GK" ? 11 : Math.max(18, Math.min(82, base + mentalityShift));
-  // 4-number formations (e.g. 4-2-3-1): render two separate MF rows
+  // formações de 4 números (ex.: 4-2-3-1): duas linhas de meio separadas
   const lines = nums.length >= 4
     ? [
-        {pos:"GK", x:lineX(13,"GK"), count:1},
-        {pos:"DF", x:lineX(29,"DF"), count:nums[0]},
-        {pos:"MF", x:lineX(43,"MF"), count:nums[1]},
-        {pos:"MF", x:lineX(57,"MF"), count:nums[2]},
-        {pos:"FW", x:lineX(71,"FW"), count:nums[3]},
+        {pos:"GK", y:87, count:1},
+        {pos:"DF", y:72, count:nums[0]},
+        {pos:"MF", y:56, count:nums[1]},
+        {pos:"MF", y:41, count:nums[2]},
+        {pos:"FW", y:26, count:nums[3]},
       ]
     : [
-        {pos:"GK", x:lineX(13,"GK"), count:1},
-        {pos:"DF", x:lineX(30,"DF"), count:nums[0]||4},
-        {pos:"MF", x:lineX(50,"MF"), count:nums[1]||3},
-        {pos:"FW", x:lineX(69,"FW"), count:nums[2]||3},
+        {pos:"GK", y:87, count:1},
+        {pos:"DF", y:71, count:nums[0]||4},
+        {pos:"MF", y:51, count:nums[1]||3},
+        {pos:"FW", y:28, count:nums[2]||3},
       ];
-  return lines.flatMap((line,li)=>distributeY(line.count).map((y,i)=>({
+  return lines.flatMap((line,li)=>distributeY(line.count).map((x,i)=>({
     id:`${line.pos}-${li}-${i}`,
     pos:line.pos,
-    x:line.x,
-    y,
+    x,
+    y:line.y,
     label:`${line.pos}${i+1}`,
   })));
 }
@@ -314,6 +312,28 @@ function selectFieldPlayer(name){
   plannerState.error = plannerState.fieldSelection ? `${name} selecionado para sair. Agora escolha um reserva.` : "";
   renderPlanner();
 }
+// fluxo de clique: "pega" um reserva, fecha o banco e espera o toque numa posição
+function pickFromBench(name){
+  const st=plannerState;
+  if(!st || !name) return;
+  if(st.starters.includes(name)){ toggleStarter(name); return; } // já em campo → manda pro banco
+  st.pendingPlace = st.pendingPlace===name ? "" : name;
+  st.benchOpen = false;
+  st.fieldSelection = "";
+  st.error = "";
+  renderPlanner();
+}
+function openBench(){ if(!plannerState) return; plannerState.benchOpen=true; plannerState.pendingPlace=""; renderPlanner(); }
+function closeBench(){ if(!plannerState) return; plannerState.benchOpen=false; renderPlanner(); }
+function cancelPending(){ if(!plannerState) return; plannerState.pendingPlace=""; plannerState.error=""; renderPlanner(); }
+// ao começar a arrastar um reserva do painel: esconde o painel NA HORA (via classe,
+// sem re-render — re-renderizar destruiria o nó que está sendo arrastado).
+function hidePanelForDrag(el){
+  if(!el?.closest || !el.closest(".bench-panel")) return;
+  plannerState.benchOpen=false;
+  $("#benchPanel")?.classList.add("is-drag-hidden");
+  document.querySelector("#tacticPlannerBox .bench-backdrop")?.classList.add("is-drag-hidden");
+}
 function resetAuto(){
   const st = plannerState;
   const auto = WC_LINEUPS.autoTactic(st.team);
@@ -354,24 +374,29 @@ function playerChip(name){
   const tagInner = selected
     ? ic('check','w-3 h-3') + tag
     : (star ? '<span class="text-gold-500">★</span> ' : '') + tag;
-  return `<button type="button" draggable="true" class="planner-player planner-card ${selected?'is-selected':''}" data-name="${name}">
+  return `<button type="button" class="planner-player planner-card ${selected?'is-selected':''}" data-name="${name}">
     ${playerCard(name, { team: st.team, size: "sm", captain: isCap })}
     <span class="planner-card-tag ${tagCls}">${tagInner}</span>
   </button>`;
 }
 function renderLineupField(){
+  const st=plannerState;
   const assigned=slotAssignments();
-  return `<div class="lineup-field-wrap">
-    <img class="lineup-field-img" src="${FIELD_IMAGE_URL}" alt="Campo de futebol">
+  const pending=st.pendingPlace;
+  return `<div class="lineup-field-wrap planner-field-portrait">
+    ${fieldPitch()}
     <div class="lineup-field-overlay">
-      ${assigned.map((slot,i)=>`
-        <div class="lineup-drop-slot ${slot.name?'filled':''} ${slot.name && plPos(slot.name)!==slot.pos?'misplaced':''} ${plannerState.fieldSelection===slot.name?'field-selected':''}" data-slot="${i}" data-pos="${slot.pos}" ${slot.name?`data-field-name="${slot.name}"`:""} style="left:${slot.x}%;top:${slot.y}%">
-          ${slot.name ? `<div class="lineup-field-player ${posToneClass(plPos(slot.name))} ${plannerState.fieldSelection===slot.name?'is-field-selected':''} ${plPos(slot.name)!==slot.pos?'is-misplaced':''}" draggable="true" data-name="${slot.name}">
-            <span class="lineup-pos">${slot.pos}</span>
-            <span class="lineup-name">${lineupCircleName(slot.name)}</span>
-            ${plannerState.captain===slot.name?'<span class="lineup-captain">C</span>':''}
-          </div>` : `<div class="lineup-empty">${slot.label}</div>`}
-        </div>`).join("")}
+      ${assigned.map((slot,i)=>{
+        const misplaced = slot.name && plPos(slot.name)!==slot.pos;
+        const isTarget = !slot.name && !!pending;
+        return `<div class="lineup-drop-slot ${slot.name?'filled':'empty'} ${misplaced?'misplaced':''} ${st.fieldSelection===slot.name?'field-selected':''} ${isTarget?'is-target':''}" data-slot="${i}" data-pos="${slot.pos}" ${slot.name?`data-field-name="${slot.name}"`:""} style="left:${slot.x}%;top:${slot.y}%">
+          ${slot.name
+            ? `<div class="field-card ${misplaced?'is-misplaced':''} ${st.fieldSelection===slot.name?'is-field-selected':''}" data-name="${slot.name}">
+                ${playerCard(slot.name, { team: st.team, size:"xs", captain: st.captain===slot.name })}
+              </div>`
+            : `<div class="lineup-empty">${isTarget?'+':slot.label}</div>`}
+        </div>`;
+      }).join("")}
     </div>
   </div>`;
 }
@@ -392,15 +417,17 @@ function positionBlock(group){
   const have = plPosCount(group.pos);
   const full = have===want;
   const countCls = full?"text-mxgreen bg-mxgreen/10":"text-amber-600 bg-amber-100";
-  const players = plSquad().filter(p=>p[1]===group.pos).map(p=>p[0]).sort((a,b)=>plRank(b)-plRank(a));
+  // só reservas (quem NÃO está em campo) — o painel é o banco
+  const players = plSquad().filter(p=>p[1]===group.pos && !st.starters.includes(p[0])).map(p=>p[0]).sort((a,b)=>plRank(b)-plRank(a));
+  const grid = players.length
+    ? `<div class="lineup-scroll-target planner-card-grid">${players.map(playerChip).join("")}</div>`
+    : `<div class="text-sm text-slate-400 py-6 text-center font-semibold">Todos os ${group.label.toLowerCase()} já estão em campo</div>`;
   return `<div class="lineup-position-block">
     <div class="flex items-center justify-between mb-2">
       <div class="${UI.label11}">${group.label}</div>
-      <div class="text-[11px] font-extrabold rounded-full px-2 py-0.5 ${countCls}">${have}/${want}</div>
+      <div class="text-[11px] font-extrabold rounded-full px-2 py-0.5 ${countCls}">${have}/${want} em campo</div>
     </div>
-    <div class="lineup-scroll-shell">
-      <div class="lineup-scroll-target planner-card-grid">${players.map(playerChip).join("")}</div>
-    </div>
+    <div class="lineup-scroll-shell">${grid}</div>
   </div>`;
 }
 function formationSelector(){
@@ -493,7 +520,7 @@ function renderPlanner(){
             <div class="font-display font-extrabold text-lg">Escalação atual</div>
             <button type="button" class="lineup-help-tip" aria-label="Como montar a escalação">
               ${ic('help-circle','w-4 h-4')}
-              <span>Clique em um jogador para colocar ou tirar do campo. Se preferir, arraste da lista e solte na bolinha da posição.</span>
+              <span>Abra o banco, toque num reserva e depois toque na posição no campo — ou arraste o reserva direto pra posição. Toque numa cartinha em campo para mandá-la pro banco.</span>
             </button>
           </div>
           <button id="autoLineup" class="text-xs font-extrabold text-usablue hover:underline flex items-center gap-1">${ic('wand-2','w-3.5 h-3.5')} Automática</button>
@@ -505,8 +532,14 @@ function renderPlanner(){
         <div class="planner-formation-section mt-3">
           ${formationSelector()}
         </div>
-        <div class="planner-player-section mt-3">
-          ${positionCarousel()}
+        <div class="planner-bench-bar mt-3">
+          ${st.pendingPlace ? `<div class="bench-pending">${ic('hand','w-4 h-4 flex-none')}<span>Escalando <b>${playerDisplayName(st.pendingPlace)}</b> — toque numa posição</span><button id="cancelPending" type="button" class="bench-pending-cancel">cancelar</button></div>` : ""}
+          <button id="openBench" type="button" class="bench-open-btn">
+            ${ic('users','w-4 h-4 flex-none')}
+            <span class="flex-1 text-left">Banco de reservas</span>
+            <span class="bench-open-count">${st.starters.length<=11 ? (plSquad().length - st.starters.length) : 0}</span>
+            ${ic('chevron-up','w-4 h-4 flex-none')}
+          </button>
         </div>
       </div>
 
@@ -568,6 +601,16 @@ function renderPlanner(){
     </div>
     </div>
 
+    <div class="bench-backdrop ${st.benchOpen?'open':''}" data-bench-close></div>
+    <div class="bench-panel ${st.benchOpen?'open':''}" id="benchPanel">
+      <div class="bench-panel-head">
+        <div class="font-display font-extrabold text-lg flex items-center gap-2">${ic('users','w-5 h-5 text-usablue')} Banco de reservas</div>
+        <button type="button" class="bench-panel-close" data-bench-close aria-label="Fechar banco">${ic('x','w-5 h-5')}</button>
+      </div>
+      <p class="text-[11px] text-slate-400 font-semibold mb-2">Toque num reserva pra escalar, ou arraste direto pro campo.</p>
+      ${positionCarousel()}
+    </div>
+
     <div class="planner-tab-footer mt-3" aria-label="Navegação da preleção">
       <button type="button" class="planner-tab-btn ${st.plannerTab !== 'tactic' ? 'active' : ''}" data-planner-tab="lineup">${ic('users','w-5 h-5')}<span>Escalação</span></button>
       <button type="button" class="planner-tab-btn ${st.plannerTab === 'tactic' ? 'active' : ''}" data-planner-tab="tactic">${ic('clipboard-list','w-5 h-5')}<span>Tática</span></button>
@@ -596,7 +639,7 @@ function wirePlanner(){
   document.querySelectorAll("#tacticPlannerBox .mentality-btn").forEach(b=> b.onclick=()=>setMentality(b.dataset.m));
   document.querySelectorAll("#tacticPlannerBox .planner-player").forEach(b=> b.onclick=()=>{
     if(Date.now()<_plannerSuppressClickUntil || b.classList.contains("is-dragging")) return;
-    toggleStarter(b.dataset.name);
+    pickFromBench(b.dataset.name);
   });
   document.querySelectorAll("#tacticPlannerBox [data-dir]").forEach(b=> b.onclick=()=>movePositionCarousel(Number(b.dataset.dir||0)));
   document.querySelectorAll("#tacticPlannerBox [data-pos-dot]").forEach(b=> b.onclick=()=>{ plannerState.listPositionIndex=Number(b.dataset.posDot||0); renderPlanner(); });
@@ -606,6 +649,7 @@ function wirePlanner(){
       const name = el.dataset.name;
       e.dataTransfer.effectAllowed="move";
       e.dataTransfer.setData("text/plain", name);
+      hidePanelForDrag(el);
       setPlayerDragVisual(name, true);
       const ghost = createLineupDragGhost(name);
       if(e.dataTransfer.setDragImage) e.dataTransfer.setDragImage(ghost, 23, 23);
@@ -616,6 +660,7 @@ function wirePlanner(){
     el.onpointerdown=e=>{
       if(e.pointerType==="mouse") return;
       const name=el.dataset.name;
+      hidePanelForDrag(el);
       pointerDrag={name, moved:false, ghost:createLineupDragGhost(name)};
       el.setPointerCapture?.(e.pointerId);
       el.classList.add("is-dragging");
@@ -646,8 +691,15 @@ function wirePlanner(){
   });
   document.querySelectorAll("#tacticPlannerBox .lineup-drop-slot").forEach(slot=>{
     slot.onclick=e=>{
+      if(Date.now()<_plannerSuppressClickUntil) return;
+      const st=plannerState;
+      if(st.pendingPlace){
+        const name=st.pendingPlace; st.pendingPlace="";
+        replaceStarterInSlot(Number(slot.dataset.slot), name);   // já re-renderiza
+        return;
+      }
       const fieldName=slot.dataset.fieldName;
-      if(fieldName && Date.now()>=_plannerSuppressClickUntil) selectFieldPlayer(fieldName);
+      if(fieldName) toggleStarter(fieldName);   // toque na cartinha em campo → manda pro banco
     };
     slot.ondragover=e=>{
       e.preventDefault();
@@ -665,6 +717,9 @@ function wirePlanner(){
   const fkSel = $("#fkTakerSelect"); if(fkSel) fkSel.onchange=()=>{ plannerState.freeKickTaker=fkSel.value; };
   const ckSel = $("#cornerTakerSelect"); if(ckSel) ckSel.onchange=()=>{ plannerState.cornerTaker=ckSel.value; };
   const auto = $("#autoLineup"); if(auto) auto.onclick=resetAuto;
+  const openB = $("#openBench"); if(openB) openB.onclick=openBench;
+  const cancelP = $("#cancelPending"); if(cancelP) cancelP.onclick=cancelPending;
+  document.querySelectorAll("#tacticPlannerBox [data-bench-close]").forEach(b=> b.onclick=closeBench);
   const cancel = $("#cancelPlanner"); if(cancel) cancel.onclick=()=>closeTacticPlanner(true);
   const confirm = $("#confirmPlanner"); if(confirm) confirm.onclick=confirmAndPlay;
 }
@@ -682,4 +737,4 @@ function confirmAndPlay(){
   if(fresh) openMatchSimulator(fresh, journeyIndex);
 }
 
-export { FIELD_IMAGE_URL, POS_GROUPS, closeTacticPlanner, openTacticPlanner };
+export { POS_GROUPS, closeTacticPlanner, openTacticPlanner };
